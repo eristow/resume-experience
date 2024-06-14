@@ -1,0 +1,5 @@
+
+### Project structuring
+https://towardsdatascience.com/how-to-structure-and-organise-a-streamlit-app-e66b65ece369
+
+
