@@ -1,7 +1,7 @@
 import streamlit as st
 import time
 
-st.write('hello, my name is app')
+st.write('hello, my name is james')
 
 with st.sidebar:
     with st.echo():
