@@ -1,0 +1,9 @@
+streamlit
+langchain
+openai
+langchain_community
+chromadb
+PyPDF2
+python-docx
+pytest
+docx2txt
