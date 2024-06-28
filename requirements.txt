@@ -4,6 +4,6 @@ langchain-community
 chromadb
 PyPDF2
 python-docx
-docx2txt
+pyngrok
 pytest
-pypdf
+langchain-mistralai

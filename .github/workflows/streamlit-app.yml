@@ -17,8 +17,9 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-      - run: pip install -r requirements.txt
-      - run: streamlit run Predict_prior_experience.py --server.headless true
+      - name: Install dependencies
+        run: |
+          pip install streamlit langchain openai langchain_community chromadb PyPDF2 python-docx pyngrok pytest pypdf
       - name: Run tests
         run: |
-          pytest tests/
+          pytest tests
