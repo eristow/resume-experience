@@ -1,9 +1,9 @@
 streamlit
 langchain
-openai
-langchain_community
+langchain-community
 chromadb
 PyPDF2
 python-docx
-pytest
 docx2txt
+pytest
+pypdf
