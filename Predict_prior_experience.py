@@ -3,11 +3,13 @@ from langchain_community.document_loaders import UnstructuredPDFLoader, PyPDFLoa
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_community.vectorstores import Chroma
 from langchain.prompts import ChatPromptTemplate, PromptTemplate
-from langchain.output_parsers import SimpleOutputParser
 from langchain_community.chat_models import ChatOllama
 from langchain.retrievers.multi_query import MultiQueryRetriever
-from langchain.runnables import RunnablePassthrough
 from langchain_mistralai import MistralAIEmbeddings
+
+# Simple passthrough function
+def passthrough(input_data):
+    return input_data
 
 # Function to process each file and return a vectorstore
 def process_file(file, embeddings):
@@ -38,10 +40,10 @@ def analyze_inputs(uploaded_files, job_ad_text, resume_text):
                 prompt=QUERY_PROMPT,
             )
             chain = (
-                {"context": retriever, "question": RunnablePassthrough()}
+                {"context": retriever, "question": passthrough}
                 | PROMPT
                 | ChatOllama()
-                | SimpleOutputParser()
+                | passthrough  # Simple output parsing
             )
             response = chain.invoke("Analyze the resume based on the job description")
             return response
