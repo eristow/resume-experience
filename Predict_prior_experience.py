@@ -1,105 +1,77 @@
-import os
 import streamlit as st
-from langchain_community.document_loaders import PyPDFLoader, Docx2txtLoader
+from langchain_community.document_loaders import UnstructuredPDFLoader, PyPDFLoader
+from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_community.vectorstores import Chroma
-from langchain.prompts import PromptTemplate
-from langchain.memory import ConversationBufferMemory
-from langchain.chains import VectorDBQA
-from langchain.text_splitter import CharacterTextSplitter
+from langchain.prompts import ChatPromptTemplate, PromptTemplate
+from langchain.output_parsers import StrOutputParser
+from langchain_community.chat_models import ChatOllama
+from langchain.retrievers.multi_query import MultiQueryRetriever
+from langchain.runnables import RunnablePassthrough
 from langchain_mistralai import MistralAIEmbeddings
 
-def process_file(uploaded_file, file_path):
-    try:
-        # Load the document based on its file type
-        if uploaded_file.type == "application/pdf":
-            loader = PyPDFLoader(file_path)
-        elif uploaded_file.type == "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
-            loader = Docx2txtLoader(file_path)
-        else:
-            st.error("Unsupported file type.")
-            return None
+# Function to process each file and return a vectorstore
+def process_file(file, embeddings):
+    loader = PyPDFLoader(file)
+    data = loader.load()
+    text_splitter = RecursiveCharacterTextSplitter(chunk_size=7500, chunk_overlap=100)
+    chunks = text_splitter.split_documents(data)
+    vectorstore = Chroma.from_documents(documents=chunks, embedding=embeddings)
+    return vectorstore
 
-        texts = loader.load()
+# Function to analyze inputs and return relevant information
+def analyze_inputs(uploaded_files, job_ad_text, resume_text):
+    if uploaded_files:
+        embeddings = MistralAIEmbeddings()  # Use MistralAIEmbeddings without API key
+        job_ad_vectorstore = None
+        resume_vectorstore = None
 
-        if not texts:
-            st.error("No content extracted from the document.")
-            return None
-
-        # Use MistralAIEmbeddings to generate embeddings
-        embedding = MistralAIEmbeddings(api_key="your-api-key")
-        vectorstore = Chroma.from_texts([doc.page_content for doc in texts], embedding)
-        return vectorstore
-    except Exception as e:
-        st.error(f"Error processing file {uploaded_file.name}: {str(e)}")
-        return None
-
-def analyze_inputs(job_ad_files, resume_files, job_ad_text, resume_text):
-    job_ad_vectorstore = None
-    resume_vectorstore = None
-
-    for uploaded_file in job_ad_files:
-        file_path = os.path.join(st.session_state.upload_dir, uploaded_file.name)
-        with open(file_path, "wb") as f:
-            f.write(uploaded_file.getbuffer())
-        job_ad_vectorstore = process_file(uploaded_file, file_path)
-
-    for uploaded_file in resume_files:
-        file_path = os.path.join(st.session_state.upload_dir, uploaded_file.name)
-        with open(file_path, "wb") as f:
-            f.write(uploaded_file.getbuffer())
-        resume_vectorstore = process_file(uploaded_file, file_path)
-
-    return job_ad_vectorstore, resume_vectorstore
-
-def main():
-    st.title("Intelligent Resume Matcher: Analyze Relevant Experience")
-    st.write("This app will compare a job description to a resume and extract the number of years of relevant work experience from the resume.")
-
-    if "upload_dir" not in st.session_state:
-        st.session_state.upload_dir = "uploads"
-        if not os.path.exists(st.session_state.upload_dir):
-            os.makedirs(st.session_state.upload_dir)
-
-    # Upload Job Descriptions
-    st.header("Job Description")
-    job_ad_files = st.file_uploader("Upload Job Descriptions", accept_multiple_files=True, type=["pdf", "docx"], key="job_ads")
-
-    # Upload Resumes
-    st.header("Resume")
-    resume_files = st.file_uploader("Upload Resumes", accept_multiple_files=True, type=["pdf", "docx"], key="resumes")
-
-    st.header("Relevant Experience")
-    st.write("Generating as soon as Resume and Job Description are filled.")
-
-    # Job Description Text Area
-    st.header("Job Description")
-    job_ad_text = st.text_area("Enter the job description here...")
-
-    # Resume Text Area
-    st.header("Resume Text")
-    resume_text = st.text_area("Enter the resume text here...")
-
-    # Analyze Button
-    if st.button("Analyze"):
-        if (job_ad_files or job_ad_text) and (resume_files or resume_text):
-            job_ad_vectorstore, resume_vectorstore = analyze_inputs(job_ad_files if job_ad_files else [], resume_files if resume_files else [], job_ad_text, resume_text)
-
-            if job_ad_vectorstore and resume_vectorstore:
-                st.success("Files processed successfully. Generating analysis...")
-
-                template = "Based on the job description [Job Description] and the provided resume [Resume], extract the total years of experience and the number of years of relevant experience from the resume. Provide your answer in the following format: 'The candidate has X years of total experience and Y years of relevant experience for this role.' Replace X with the total number of years of experience and Y with the number of years of relevant experience."
-                prompt = PromptTemplate(input_variables=[], template=template)
-                memory = ConversationBufferMemory(input_key='question', return_messages=True)
-
-                llm = Ollama(model="mistral", verbose=True)
-                qa = VectorDBQA.from_chain_type(llm=llm, chain_type="stuff", vectorstore=resume_vectorstore, memory=memory, input_key='question', prompt=prompt)
-
-                response = qa({"question": "Based on the job description and the resume, how many years of total and relevant experience does the candidate have?"})
-                st.write(response["output_text"])
+        for file in uploaded_files:
+            if "Job" in file.name:
+                job_ad_vectorstore = process_file(file, embeddings)
             else:
-                st.error("Failed to process the files.")
-        else:
-            st.warning("Please upload the files or enter the texts.")
+                resume_vectorstore = process_file(file, embeddings)
 
-if __name__ == "__main__":
-    main()
+        if job_ad_vectorstore and resume_vectorstore:
+            retriever = MultiQueryRetriever.from_llm(
+                vector_db=job_ad_vectorstore.as_retriever(),
+                llm=ChatOllama(),
+                prompt=QUERY_PROMPT,
+            )
+            chain = (
+                {"context": retriever, "question": RunnablePassthrough()}
+                | PROMPT
+                | ChatOllama()
+                | StrOutputParser()
+            )
+            response = chain.invoke("Analyze the resume based on the job description")
+            return response
+
+    return "Failed to process the files."
+
+# Streamlit UI components
+st.title("Intelligent Resume Matcher: Analyze Relevant Experience")
+
+st.write("This app will compare a job description to a resume and extract the number of years of relevant work experience from the resume.")
+
+uploaded_files = st.file_uploader("Upload Job Descriptions and Resumes", type=["pdf"], accept_multiple_files=True)
+job_ad_text = st.text_area("Job Description")
+resume_text = st.text_area("Resume Text")
+
+if st.button("Analyze"):
+    with st.spinner("Processing..."):
+        result = analyze_inputs(uploaded_files, job_ad_text, resume_text)
+        st.write(result)
+
+# Define the query prompt
+QUERY_PROMPT = PromptTemplate(
+    input_variables=["question"],
+    template="""You are an AI language model assistant. Your task is to generate three different versions of the given user question to retrieve relevant documents from a vector database. By generating multiple perspectives on the user question, your goal is to help the user overcome some of the limitations of the distance-based similarity search. Provide these alternative questions separated by newlines.
+    Original question: {question}""",
+)
+
+# Define the RAG prompt
+PROMPT = ChatPromptTemplate.from_template(
+    template="""Answer the question based ONLY on the following context:
+    {context}
+    Question: {question}"""
+)

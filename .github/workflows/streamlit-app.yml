@@ -1,25 +1,29 @@
-name: Streamlit app
+name: Deploy Streamlit App
 
 on:
   push:
-    branches: ["main"]
-  pull_request:
-    branches: ["main"]
-
-permissions:
-  contents: read
+    branches:
+      - main
 
 jobs:
-  streamlit:
+  build:
     runs-on: ubuntu-latest
+
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-      - name: Install dependencies
-        run: |
-          pip install streamlit langchain openai langchain_community chromadb PyPDF2 python-docx pyngrok pytest pypdf
-      - name: Run tests
-        run: |
-          pytest tests
+    - uses: actions/checkout@v2
+
+    - name: Set up Python
+      uses: actions/setup-python@v2
+      with:
+        python-version: '3.11'
+
+    - name: Install dependencies
+      run: |
+        python -m venv venv
+        source venv/bin/activate
+        pip install -r requirements.txt
+
+    - name: Run Streamlit
+      run: |
+        source venv/bin/activate
+        streamlit run Predict_prior_experience.py
