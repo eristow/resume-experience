@@ -6,49 +6,66 @@ from langchain.prompts import ChatPromptTemplate, PromptTemplate
 from langchain_community.chat_models import ChatOllama
 from langchain.retrievers.multi_query import MultiQueryRetriever
 from langchain_mistralai import MistralAIEmbeddings
+import traceback
+import os
 
 # Simple passthrough function
 def passthrough(input_data):
     return input_data
 
 # Function to process each file and return a vectorstore
-def process_file(file, embeddings):
-    loader = PyPDFLoader(file)
-    data = loader.load()
-    text_splitter = RecursiveCharacterTextSplitter(chunk_size=7500, chunk_overlap=100)
-    chunks = text_splitter.split_documents(data)
-    vectorstore = Chroma.from_documents(documents=chunks, embedding=embeddings)
-    return vectorstore
+def process_file(file_path, embeddings):
+    try:
+        loader = PyPDFLoader(file_path)
+        data = loader.load()
+        text_splitter = RecursiveCharacterTextSplitter(chunk_size=7500, chunk_overlap=100)
+        chunks = text_splitter.split_documents(data)
+        vectorstore = Chroma.from_documents(documents=chunks, embedding=embeddings)
+        return vectorstore
+    except Exception as e:
+        st.error(f"Error processing file {file_path}: {e}")
+        st.error(traceback.format_exc())
+        return None
 
 # Function to analyze inputs and return relevant information
 def analyze_inputs(uploaded_files, job_ad_text, resume_text):
-    if uploaded_files:
-        embeddings = MistralAIEmbeddings()  # Use MistralAIEmbeddings without API key
-        job_ad_vectorstore = None
-        resume_vectorstore = None
+    try:
+        if uploaded_files:
+            embeddings = MistralAIEmbeddings()  # Use MistralAIEmbeddings without API key
+            job_ad_vectorstore = None
+            resume_vectorstore = None
 
-        for file in uploaded_files:
-            if "Job" in file.name:
-                job_ad_vectorstore = process_file(file, embeddings)
-            else:
-                resume_vectorstore = process_file(file, embeddings)
+            for uploaded_file in uploaded_files:
+                # Save the uploaded file to a temporary location
+                temp_file_path = os.path.join("temp_dir", uploaded_file.name)
+                with open(temp_file_path, "wb") as temp_file:
+                    temp_file.write(uploaded_file.getbuffer())
 
-        if job_ad_vectorstore and resume_vectorstore:
-            retriever = MultiQueryRetriever.from_llm(
-                vector_db=job_ad_vectorstore.as_retriever(),
-                llm=ChatOllama(),
-                prompt=QUERY_PROMPT,
-            )
-            chain = (
-                {"context": retriever, "question": passthrough}
-                | PROMPT
-                | ChatOllama()
-                | passthrough  # Simple output parsing
-            )
-            response = chain.invoke("Analyze the resume based on the job description")
-            return response
+                if "Job" in uploaded_file.name:
+                    job_ad_vectorstore = process_file(temp_file_path, embeddings)
+                else:
+                    resume_vectorstore = process_file(temp_file_path, embeddings)
 
-    return "Failed to process the files."
+            if job_ad_vectorstore and resume_vectorstore:
+                retriever = MultiQueryRetriever.from_llm(
+                    vector_db=job_ad_vectorstore.as_retriever(),
+                    llm=ChatOllama(),
+                    prompt=QUERY_PROMPT,
+                )
+                chain = (
+                    {"context": retriever, "question": passthrough}
+                    | PROMPT
+                    | ChatOllama()
+                    | passthrough  # Simple output parsing
+                )
+                response = chain.invoke("Analyze the resume based on the job description")
+                return response
+
+        return "Failed to process the files."
+    except Exception as e:
+        st.error(f"Error analyzing inputs: {e}")
+        st.error(traceback.format_exc())
+        return "Failed to analyze inputs."
 
 # Streamlit UI components
 def main():
@@ -80,4 +97,9 @@ PROMPT = ChatPromptTemplate.from_template(
 )
 
 if __name__ == "__main__":
+    # Create a temporary directory to save uploaded files
+    os.makedirs("temp_dir", exist_ok=True)
     main()
+    # Clean up the temporary directory after the app closes
+    import shutil
+    shutil.rmtree("temp_dir")
