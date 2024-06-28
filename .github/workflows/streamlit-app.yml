@@ -23,7 +23,12 @@ jobs:
         source venv/bin/activate
         pip install -r requirements.txt
 
-    - name: Run Streamlit
+    - name: Run Tests
       run: |
         source venv/bin/activate
-        streamlit run Predict_prior_experience.py
+        pytest tests
+
+    - name: Deploy Streamlit
+      run: |
+        source venv/bin/activate
+        nohup streamlit run Predict_prior_experience.py &

@@ -3,7 +3,7 @@ from langchain_community.document_loaders import UnstructuredPDFLoader, PyPDFLoa
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_community.vectorstores import Chroma
 from langchain.prompts import ChatPromptTemplate, PromptTemplate
-from langchain.output_parsers import StrOutputParser
+from langchain.output_parsers import SimpleOutputParser
 from langchain_community.chat_models import ChatOllama
 from langchain.retrievers.multi_query import MultiQueryRetriever
 from langchain.runnables import RunnablePassthrough
@@ -41,7 +41,7 @@ def analyze_inputs(uploaded_files, job_ad_text, resume_text):
                 {"context": retriever, "question": RunnablePassthrough()}
                 | PROMPT
                 | ChatOllama()
-                | StrOutputParser()
+                | SimpleOutputParser()
             )
             response = chain.invoke("Analyze the resume based on the job description")
             return response
@@ -49,18 +49,19 @@ def analyze_inputs(uploaded_files, job_ad_text, resume_text):
     return "Failed to process the files."
 
 # Streamlit UI components
-st.title("Intelligent Resume Matcher: Analyze Relevant Experience")
+def main():
+    st.title("Intelligent Resume Matcher: Analyze Relevant Experience")
 
-st.write("This app will compare a job description to a resume and extract the number of years of relevant work experience from the resume.")
+    st.write("This app will compare a job description to a resume and extract the number of years of relevant work experience from the resume.")
 
-uploaded_files = st.file_uploader("Upload Job Descriptions and Resumes", type=["pdf"], accept_multiple_files=True)
-job_ad_text = st.text_area("Job Description")
-resume_text = st.text_area("Resume Text")
+    uploaded_files = st.file_uploader("Upload Job Descriptions and Resumes", type=["pdf"], accept_multiple_files=True)
+    job_ad_text = st.text_area("Job Description")
+    resume_text = st.text_area("Resume Text")
 
-if st.button("Analyze"):
-    with st.spinner("Processing..."):
-        result = analyze_inputs(uploaded_files, job_ad_text, resume_text)
-        st.write(result)
+    if st.button("Analyze"):
+        with st.spinner("Processing..."):
+            result = analyze_inputs(uploaded_files, job_ad_text, resume_text)
+            st.write(result)
 
 # Define the query prompt
 QUERY_PROMPT = PromptTemplate(
@@ -75,3 +76,6 @@ PROMPT = ChatPromptTemplate.from_template(
     {context}
     Question: {question}"""
 )
+
+if __name__ == "__main__":
+    main()
