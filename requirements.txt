@@ -7,3 +7,5 @@ python-docx
 pyngrok
 pytest
 langchain-mistralai
+torch
+transformers

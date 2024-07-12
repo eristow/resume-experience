@@ -9,67 +9,64 @@ from langchain_mistralai import MistralAIEmbeddings
 import traceback
 import os
 
+# Initialize chat history
+if 'chat_history' not in st.session_state:
+    st.session_state.chat_history = []
+
 # Simple passthrough function
 def passthrough(input_data):
     return input_data
 
-# Function to process each file and return a vectorstore
-def process_file(file_path, embeddings):
-    try:
-        loader = PyPDFLoader(file_path)
-        data = loader.load()
-        text_splitter = RecursiveCharacterTextSplitter(chunk_size=7500, chunk_overlap=100)
-        chunks = text_splitter.split_documents(data)
-        vectorstore = Chroma.from_documents(documents=chunks, embedding=embeddings)
-        return vectorstore
-    except Exception as e:
-        st.error(f"Error processing file {file_path}: {e}")
-        st.error(traceback.format_exc())
-        return None
+# Define file processing function
+def process_file(uploaded_file, file_path, embeddings):
+    if not os.path.isfile(file_path):
+        with st.spinner("Analyzing your document..."):
+            loader = PyPDFLoader(file_path)
+            data = loader.load()
+            text_splitter = RecursiveCharacterTextSplitter(chunk_size=7500, chunk_overlap=100)
+            chunks = text_splitter.split_documents(data)
+            vectorstore = Chroma.from_documents(documents=chunks, embedding=embeddings)
+            return vectorstore
 
 # Function to analyze inputs and return relevant information
 def analyze_inputs(uploaded_files, job_ad_text, resume_text):
-    try:
-        if uploaded_files:
-            embeddings = MistralAIEmbeddings()  # Use MistralAIEmbeddings without API key
-            job_ad_vectorstore = None
-            resume_vectorstore = None
+    if uploaded_files:
+        # Use the local Mistral model
+        embeddings = MistralAIEmbeddings(model_path="/mnt/c/Users/teres/models/mistralai/Mistral-7B-Instruct-v0.2")
+        job_ad_vectorstore = None
+        resume_vectorstore = None
 
-            for uploaded_file in uploaded_files:
-                # Save the uploaded file to a temporary location
-                temp_file_path = os.path.join("temp_dir", uploaded_file.name)
-                with open(temp_file_path, "wb") as temp_file:
-                    temp_file.write(uploaded_file.getbuffer())
+        for file in uploaded_files:
+            # Save the uploaded file to a temporary location
+            temp_file_path = os.path.join("temp_dir", file.name)
+            with open(temp_file_path, "wb") as temp_file:
+                temp_file.write(file.getbuffer())
 
-                if "Job" in uploaded_file.name:
-                    job_ad_vectorstore = process_file(temp_file_path, embeddings)
-                else:
-                    resume_vectorstore = process_file(temp_file_path, embeddings)
+            if "Job" in file.name:
+                job_ad_vectorstore = process_file(file, temp_file_path, embeddings)
+            else:
+                resume_vectorstore = process_file(file, temp_file_path, embeddings)
 
-            if job_ad_vectorstore and resume_vectorstore:
-                retriever = MultiQueryRetriever.from_llm(
-                    vector_db=job_ad_vectorstore.as_retriever(),
-                    llm=ChatOllama(),
-                    prompt=QUERY_PROMPT,
-                )
-                chain = (
-                    {"context": retriever, "question": passthrough}
-                    | PROMPT
-                    | ChatOllama()
-                    | passthrough  # Simple output parsing
-                )
-                response = chain.invoke("Analyze the resume based on the job description")
-                return response
+        if job_ad_vectorstore and resume_vectorstore:
+            retriever = MultiQueryRetriever.from_llm(
+                vector_db=job_ad_vectorstore.as_retriever(),
+                llm=ChatOllama(),
+                prompt=QUERY_PROMPT,
+            )
+            chain = (
+                {"context": retriever, "question": passthrough}
+                | PROMPT
+                | ChatOllama()
+                | passthrough  # Simple output parsing
+            )
+            response = chain.invoke("Analyze the resume based on the job description")
+            return response
 
-        return "Failed to process the files."
-    except Exception as e:
-        st.error(f"Error analyzing inputs: {e}")
-        st.error(traceback.format_exc())
-        return "Failed to analyze inputs."
+    return "Failed to process the files."
 
 # Streamlit UI components
 def main():
-    st.title("Intelligent Resume Matcher: Analyze Relevant Experience")
+    st.title("Resume Experience Analyzer")
 
     st.write("This app will compare a job description to a resume and extract the number of years of relevant work experience from the resume.")
 
