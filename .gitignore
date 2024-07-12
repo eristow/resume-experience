@@ -1,0 +1,40 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Distribution / packaging
+.Python
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+site/
+
+# Tools
+tools.py
+
+# VS Code settings
+.vscode/
+
+# Jupyter Notebook checkpoints
+.ipynb_checkpoints/
+
+# Pytest
+.cache/
+
+# Environment variables
+.env
+
+# Logs
+*.log
+
+# Exclude these directories
+files/
+jj/
+misc/
+src/
+tests/
+uploads/
+venv/
