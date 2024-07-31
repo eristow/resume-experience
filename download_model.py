@@ -2,7 +2,7 @@
 import os
 
 # Load Hugging Face token from environment
-from tools import ACCESS_TOKEN  # Import the access token from tools.py
+from token import ACCESS_TOKEN  # Import the access token from tools.py
 
 
 # Switch out the model address to the location on your local machine
