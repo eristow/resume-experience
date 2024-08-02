@@ -1,11 +1,14 @@
 import os
 import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
+from langchain.embeddings.base import Embeddings
 from PyPDF2 import PdfReader
+import docx
+from langchain.document_loaders import TextLoader
 from langchain.text_splitter import RecursiveCharacterTextSplitter
-from langchain_community.vectorstores import Chroma
+from langchain.vectorstores import Chroma
 
-class CustomEmbeddings:
+class CustomEmbeddings(Embeddings):
     def __init__(self, model_name):
         quant_config = BitsAndBytesConfig(
             load_in_4bit=True,
@@ -15,22 +18,37 @@ class CustomEmbeddings:
         )
         self.model = AutoModelForCausalLM.from_pretrained(model_name, quantization_config=quant_config)
         self.tokenizer = AutoTokenizer.from_pretrained(model_name)
-        self.tokenizer.pad_token = self.tokenizer.eos_token  # Add this line to set padding token
-
+        self.tokenizer.pad_token = self.tokenizer.eos_token
+    
     def embed_documents(self, documents):
         embeddings = []
         for doc in documents:
             tokens = self.tokenizer(doc, return_tensors="pt", padding=True, truncation=True)
             with torch.no_grad():
                 outputs = self.model(**tokens)
-            embeddings.append(outputs.last_hidden_state.mean(dim=1).cpu().numpy().tolist())  # Convert to list
+            embeddings.append(outputs.logits.mean(dim=1).cpu().numpy())
         return embeddings
 
     def embed_query(self, query):
         tokens = self.tokenizer(query, return_tensors="pt", padding=True, truncation=True)
         with torch.no_grad():
             outputs = self.model(**tokens)
-        return outputs.last_hidden_state.mean(dim=1).cpu().numpy().tolist()  # Convert to list
+        return outputs.logits.mean(dim=1).cpu().numpy()
+
+def extract_text_from_file(uploaded_file):
+    file_extension = uploaded_file.name.split(".")[-1].lower()
+    text = ""
+
+    if file_extension == "pdf":
+        reader = PdfReader(uploaded_file)
+        for page in reader.pages:
+            text += page.extract_text() + "\n"
+    elif file_extension in ["doc", "docx"]:
+        doc = docx.Document(uploaded_file)
+        for paragraph in doc.paragraphs:
+            text += paragraph.text + "\n"
+
+    return text
 
 def process_file(file_path, embeddings):
     if os.path.isfile(file_path):
@@ -41,18 +59,13 @@ def process_file(file_path, embeddings):
                 text += page.extract_text()
             with open("temp_text.txt", "w") as text_file:
                 text_file.write(text)
-            
-            data = TextLoader("temp_text.txt").load()
+            loader = TextLoader("temp_text.txt")
+            data = loader.load()
             text_splitter = RecursiveCharacterTextSplitter(chunk_size=7500, chunk_overlap=100)
             chunks = text_splitter.split_documents(data)
-            if chunks:  # Check if chunks is not empty
-                vectorstore = Chroma.from_documents(documents=chunks, embedding=embeddings)
-                return vectorstore
-    return None
-
-def extract_text_from_file(uploaded_file):
-    if uploaded_file:
-        with open(uploaded_file.name, "wb") as f:
-            f.write(uploaded_file.getbuffer())
-        return uploaded_file.name
+            if chunks:
+                embeddings_list = embeddings.embed_documents([chunk.page_content for chunk in chunks])
+                if embeddings_list:
+                    vectorstore = Chroma.from_documents(documents=chunks, embedding=embeddings)
+                    return vectorstore
     return None
