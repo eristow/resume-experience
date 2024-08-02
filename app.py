@@ -1,37 +1,5 @@
-"""
-Resume Experience App
-
-Description: This app compares a job description to a resume and extract
-the number of years of relevant work experience from
-the resume.
-
-"""
-# Define CustomEmbeddings class
-class CustomEmbeddings(Embeddings):
-    def __init__(self, model_name):
-        quant_config = BitsAndBytesConfig(
-            load_in_4bit=True,
-            bnb_4bit_quant_type="nf4",
-            bnb_4bit_compute_dtype=torch.bfloat16,
-            bnb_4bit_use_double_quant=True,
-        )
-        self.model = AutoModelForCausalLM.from_pretrained(model_name, quantization_config=quant_config)
-        self.tokenizer = AutoTokenizer.from_pretrained(model_name)
-    
-    def embed_documents(self, documents):
-        embeddings = []
-        for doc in documents:
-            tokens = self.tokenizer(doc, return_tensors="pt", padding=True, truncation=True)
-            with torch.no_grad():
-                outputs = self.model(**tokens)
-            embeddings.append(outputs.last_hidden_state.mean(dim=1).cpu().numpy())
-        return embeddings
-
-    def embed_query(self, query):
-        tokens = self.tokenizer(query, return_tensors="pt", padding=True, truncation=True)
-        with torch.no_grad():
-            outputs = self.model(**tokens)
-        return outputs.last_hidden_state.mean(dim=1).cpu().numpy()
+import streamlit as st
+from tools import CustomEmbeddings, process_file, extract_text_from_file
 
 # Initialize chat history
 if 'chat_history' not in st.session_state:
@@ -41,75 +9,26 @@ if 'chat_history' not in st.session_state:
 def passthrough(input_data):
     return input_data
 
-# Define file processing function
-def process_file(uploaded_file, file_path, embeddings):
-    if os.path.isfile(file_path):
-        print ("after if")
-        with st.spinner("Analyzing your document..."):
-            reader = PdfReader(file_path)
-            print ("after reader")
-            text = ""
-            for page in reader.pages:
-                text += page.extract_text()
-            print(f'text: {text}')
-            with open("temp_text.txt", "w") as text_file:
-                text_file.write(text)
-            print("created temp txt file")
-            
-            loader = TextLoader("temp_text.txt")
-            data = loader.load()
-            print ("after data")
-            text_splitter = RecursiveCharacterTextSplitter(chunk_size=7500, chunk_overlap=100)
-            print ("after text_splitter")
-            chunks = text_splitter.split_documents(data)
-            print ("after chunks")
-            vectorstore = Chroma.from_documents(documents=chunks, embedding=embeddings)
-            print ("after vectorstore")
-            return vectorstore
-
 # Function to analyze inputs and return relevant information
-def analyze_inputs(uploaded_files, job_ad_text, resume_text):
-    print (uploaded_files, job_ad_text, resume_text)
+def analyze_inputs(job_file_path, resume_file_path, job_ad_text, resume_text):
+    embeddings = CustomEmbeddings(model_name="./mistral")
+    job_ad_vectorstore = process_file(job_file_path, embeddings)
+    resume_vectorstore = process_file(resume_file_path, embeddings)
 
-    if uploaded_files:
-        # Use the local Mistral model
-        embeddings = CustomEmbeddings(model_name="/home/tristow/resume-experience/mistral")
-        job_ad_vectorstore = None
-        resume_vectorstore = None
-        print ("after embeddings")
-
-        for file in uploaded_files:
-            # Save the uploaded file to a temporary location
-            temp_file_path = os.path.join("temp_dir", file.name)
-            with open(temp_file_path, "wb") as temp_file:
-                temp_file.write(file.getbuffer())
-
-            if "Job" in file.name:
-                job_ad_vectorstore = process_file(file, temp_file_path, embeddings)
-                print ("job")
-            else:
-                resume_vectorstore = process_file(file, temp_file_path, embeddings)
-                print ("resume")
-        print (job_ad_vectorstore)
-        print (resume_vectorstore)
-
-        if job_ad_vectorstore and resume_vectorstore:
-            retriever = MultiQueryRetriever.from_llm(
-                vector_db=job_ad_vectorstore.as_retriever(),
-                llm=ChatOllama(),
-                prompt=QUERY_PROMPT,
-            )
-            print ("retriever")
-            chain = (
-                {"context": retriever, "question": passthrough}
-                | PROMPT
-                | ChatOllama()
-                | passthrough  # Simple output parsing
-            )
-            print ("chain")
-            response = chain.invoke("Analyze the resume based on the job description")
-            print ("response")
-            return response
+    if job_ad_vectorstore and resume_vectorstore:
+        retriever = MultiQueryRetriever.from_llm(
+            vector_db=job_ad_vectorstore.as_retriever(),
+            llm=ChatOllama(),
+            prompt=QUERY_PROMPT,
+        )
+        chain = (
+            {"context": retriever, "question": passthrough}
+            | PROMPT
+            | ChatOllama()
+            | passthrough  # Simple output parsing
+        )
+        response = chain.invoke("Analyze the resume based on the job description")
+        return response
 
     return "Failed to process the files."
 
@@ -117,15 +36,25 @@ def analyze_inputs(uploaded_files, job_ad_text, resume_text):
 def main():
     st.title("Resume Experience Analyzer")
 
-    st.write("This app will compare a job description to a resume and extract the number of years of relevant work experience from the resume.")
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        job_file = st.file_uploader("Upload Job Description", type=["pdf", "doc", "docx"])
+        job_file_path = extract_text_from_file(job_file)
+        if job_file_path:
+            job_ad_text = open(job_file_path, "r").read()
+            st.text_area("Job Description Text", value=job_ad_text, height=300)
 
-    uploaded_files = st.file_uploader("Upload Job Descriptions and Resumes", type=["pdf", "doc", "docx"], accept_multiple_files=True)
-    job_ad_text = st.text_area("Job Description")
-    resume_text = st.text_area("Resume Text")
+    with col2:
+        resume_file = st.file_uploader("Upload Resume", type=["pdf", "doc", "docx"])
+        resume_file_path = extract_text_from_file(resume_file)
+        if resume_file_path:
+            resume_text = open(resume_file_path, "r").read()
+            st.text_area("Resume Text", value=resume_text, height=300)
 
     if st.button("Analyze"):
         with st.spinner("Processing..."):
-            result = analyze_inputs(uploaded_files, job_ad_text, resume_text)
+            result = analyze_inputs(job_file_path, resume_file_path, job_ad_text, resume_text)
             st.write(result)
 
 # Define the query prompt
