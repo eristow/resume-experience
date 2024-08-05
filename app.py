@@ -1,7 +1,8 @@
 import streamlit as st
 from langchain.prompts import ChatPromptTemplate, PromptTemplate
 from langchain_community.chat_models import ChatOllama
-from langchain.retrievers import BM25Retriever
+from langchain_community.retrievers import BM25Retriever
+from langchain_community.vectorstores import Chroma
 from tools import CustomEmbeddings, process_file, extract_text_from_file
 import os
 
@@ -18,6 +19,7 @@ def analyze_inputs(job_file_path, resume_file_path, job_ad_text, resume_text):
     if job_file_path and resume_file_path:
         # Use the local Mistral model
         embeddings = CustomEmbeddings(model_name="./mistral")
+        print(f"embeddings: {embeddings}")
 
         job_ad_vectorstore = process_file(job_file_path, embeddings)
         resume_vectorstore = process_file(resume_file_path, embeddings)
@@ -52,7 +54,7 @@ def main():
             job_file_path = os.path.join("temp_dir", job_file.name)
             with open(job_file_path, "wb") as temp_file:
                 temp_file.write(job_file.getbuffer())
-            job_ad_text = extract_text_from_file(job_file)
+            job_ad_text = extract_text_from_file(job_file, job_file_path)
 
     with col2:
         resume_file = st.file_uploader("Upload Resume", type=["pdf", "doc", "docx"], key="resume_file")
@@ -60,7 +62,7 @@ def main():
             resume_file_path = os.path.join("temp_dir", resume_file.name)
             with open(resume_file_path, "wb") as temp_file:
                 temp_file.write(resume_file.getbuffer())
-            resume_text = extract_text_from_file(resume_file)
+            resume_text = extract_text_from_file(resume_file, resume_file_path)
 
     col1.text_area("Job Description", value=job_ad_text, height=300)
     col2.text_area("Resume Text", value=resume_text, height=300)

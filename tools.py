@@ -4,9 +4,14 @@ from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
 from langchain.embeddings.base import Embeddings
 from PyPDF2 import PdfReader
 import docx
-from langchain.document_loaders import TextLoader
+from langchain_community.document_loaders import TextLoader
 from langchain.text_splitter import RecursiveCharacterTextSplitter
-from langchain.vectorstores import Chroma
+from langchain_community.vectorstores import Chroma
+import pdf2image
+import pytesseract
+from pytesseract import Output, TesseractError
+
+OCR_LANG = "eng"
 
 class CustomEmbeddings(Embeddings):
     def __init__(self, model_name):
@@ -35,7 +40,7 @@ class CustomEmbeddings(Embeddings):
             outputs = self.model(**tokens)
         return outputs.logits.mean(dim=1).cpu().numpy()
 
-def extract_text_from_file(uploaded_file):
+def extract_text_from_file(uploaded_file, file_path):
     file_extension = uploaded_file.name.split(".")[-1].lower()
     text = ""
 
@@ -47,6 +52,24 @@ def extract_text_from_file(uploaded_file):
         doc = docx.Document(uploaded_file)
         for paragraph in doc.paragraphs:
             text += paragraph.text + "\n"
+    
+    # If text is empty, try extracting using image and OCR
+    if text == "" or text.isspace():
+        text = extract_text_from_image(file_path)
+
+    return None if not text else text
+
+# ENSURE POPPLER AND TESSERACT ARE INSTALLED ON LOCAL MACHINE
+#   - poppler: https://poppler.freedesktop.org/
+#   - tesseract: https://tesseract-ocr.github.io/tessdoc/Installation.html 
+# Doesn't work if using uploaded_file. Only with file_path
+def extract_text_from_image(file_path):
+    text = ""
+    images = pdf2image.convert_from_path(file_path)
+    
+    for image in images:
+        ocr_dict = pytesseract.image_to_data(image, lang=OCR_LANG, output_type=Output.DICT)
+        text += " ".join([word for word in ocr_dict["text"] if word])
 
     return text
 

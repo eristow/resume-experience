@@ -2,7 +2,9 @@ streamlit
 langchain
 langchain-community
 chromadb
+pdf2image
 PyPDF2
+pytesseract
 python-docx
 pyngrok
 pytest
