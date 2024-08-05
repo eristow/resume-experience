@@ -19,20 +19,27 @@ def analyze_inputs(job_file_path, resume_file_path, job_ad_text, resume_text):
     if job_file_path and resume_file_path:
         # Use the local Mistral model
         embeddings = CustomEmbeddings(model_name="./mistral")
-        print(f"embeddings: {embeddings}")
 
         job_ad_vectorstore = process_file(job_file_path, embeddings)
-        resume_vectorstore = process_file(resume_file_path, embeddings)
+        print("after job_ad_vectorstore")
+        # resume_vectorstore = process_file(resume_file_path, embeddings)
+        print("after resume_vectorstore")
+        print(f"job_ad_vectorstore: {job_ad_vectorstore}")
+        # print(f"resume_vectorstore: {resume_vectorstore}")
 
         if job_ad_vectorstore and resume_vectorstore:
+            print("both vectorstores exist")
             retriever = BM25Retriever(vector_db=job_ad_vectorstore.as_retriever())
+            print("after retriever")
             chain = (
                 {"context": retriever, "question": passthrough}
                 | PROMPT
                 | ChatOllama()
                 | passthrough  # Simple output parsing
             )
+            print("after chain")
             response = chain.invoke("Analyze the resume based on the job description")
+            print("after response")
             return response
 
     return "Failed to process the files."

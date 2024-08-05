@@ -6,10 +6,15 @@ from PyPDF2 import PdfReader
 import docx
 from langchain_community.document_loaders import TextLoader
 from langchain.text_splitter import RecursiveCharacterTextSplitter
-from langchain_community.vectorstores import Chroma
+from langchain_chroma import Chroma
+from chromadb import Client
+from chromadb.config import Settings
 import pdf2image
 import pytesseract
 from pytesseract import Output, TesseractError
+import numpy as np
+from llama_index.embeddings.huggingface import HuggingFaceEmbedding
+from llama_index.embeddings.instructor import InstructorEmbedding
 
 OCR_LANG = "eng"
 
@@ -21,24 +26,46 @@ class CustomEmbeddings(Embeddings):
             bnb_4bit_compute_dtype=torch.bfloat16,
             bnb_4bit_use_double_quant=True,
         )
-        self.model = AutoModelForCausalLM.from_pretrained(model_name, quantization_config=quant_config)
+        self.model = AutoModelForCausalLM.from_pretrained(model_name, output_hidden_states=True, quantization_config=quant_config)
         self.tokenizer = AutoTokenizer.from_pretrained(model_name)
         self.tokenizer.pad_token = self.tokenizer.eos_token
-    
+
     def embed_documents(self, documents):
         embeddings = []
         for doc in documents:
             tokens = self.tokenizer(doc, return_tensors="pt", padding=True, truncation=True)
+
             with torch.no_grad():
                 outputs = self.model(**tokens)
-            embeddings.append(outputs.logits.mean(dim=1).cpu().numpy())
+
+            if hasattr(outputs, 'hidden_states'):
+                hidden_states = outputs.hidden_states
+            elif hasattr(outputs, 'last_hidden_state'):
+                hidden_states = outputs.last_hidden_state
+            else:
+                raise AttributeError("The model's output does not have 'hidden_states' or 'last_hidden_state'.")
+
+            embedding = hidden_states[-1].mean(dim=1).cpu().numpy().flatten().tolist()
+            embeddings.append(embedding)
+
         return embeddings
 
     def embed_query(self, query):
         tokens = self.tokenizer(query, return_tensors="pt", padding=True, truncation=True)
+
         with torch.no_grad():
             outputs = self.model(**tokens)
-        return outputs.logits.mean(dim=1).cpu().numpy()
+
+        if hasattr(outputs, 'hidden_states'):
+            hidden_states = outputs.hidden_states
+        elif hasattr(outputs, 'last_hidden_state'):
+            hidden_states = outputs.last_hidden_state
+        else:
+            raise AttributeError("The model's output does not have 'hidden_states' or 'last_hidden_state'.")
+
+        embedding = hidden_states[-1].mean(dim=1).cpu().numpy().flatten().tolist()
+        return embedding
+
 
 def extract_text_from_file(uploaded_file, file_path):
     file_extension = uploaded_file.name.split(".")[-1].lower()
@@ -84,11 +111,22 @@ def process_file(file_path, embeddings):
                 text_file.write(text)
             loader = TextLoader("temp_text.txt")
             data = loader.load()
+            # TODO: this isn't working for job_ad_vectorstore
             text_splitter = RecursiveCharacterTextSplitter(chunk_size=7500, chunk_overlap=100)
             chunks = text_splitter.split_documents(data)
+            print(f"chunks: {chunks}")
             if chunks:
                 embeddings_list = embeddings.embed_documents([chunk.page_content for chunk in chunks])
+                # print(f"embeddings_list: {embeddings_list}")
+
                 if embeddings_list:
-                    vectorstore = Chroma.from_documents(documents=chunks, embedding=embeddings)
-                    return vectorstore
+                    print(f"embeddings: {embeddings}")
+                    try:
+                        vectorstore = Chroma.from_documents(documents=chunks, embedding=embeddings)
+                        print(f"vectorstore: {vectorstore}")
+                        return vectorstore
+                    except Exception as e:
+                        print("An error occurred while creating the vectorstore:")
+                        print(traceback.format_exc())
+                        return None
     return None

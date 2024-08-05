@@ -1,6 +1,10 @@
 streamlit
 langchain
 langchain-community
+langchain-chroma
+llama-index
+llama-index-embeddings-huggingface
+llama-index-embeddings-instructor
 chromadb
 pdf2image
 PyPDF2
@@ -9,5 +13,6 @@ python-docx
 pyngrok
 pytest
 langchain-mistralai
+sentence-transformers
 torch
 transformers
