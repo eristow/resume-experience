@@ -34,21 +34,35 @@ class CustomEmbeddings(Embeddings):
         with torch.no_grad():
             outputs = self.model(**tokens)
         return outputs.logits.mean(dim=1).cpu().numpy()
+    
+def pdfimage_text_extract_from_file(uploaded_file):
+    ### my install tesseract
+    # pip install pytesseract
+    # sudo apt-get install tesseract-ocr
+    import pytesseract
+    from pdf2image import convert_from_path
+    
+    pages = convert_from_path(uploaded_file, 500)
 
-def extract_text_from_file(uploaded_file):
-    file_extension = uploaded_file.name.split(".")[-1].lower()
-    text = ""
-
-    if file_extension == "pdf":
-        reader = PdfReader(uploaded_file)
-        for page in reader.pages:
-            text += page.extract_text() + "\n"
-    elif file_extension in ["doc", "docx"]:
-        doc = docx.Document(uploaded_file)
-        for paragraph in doc.paragraphs:
-            text += paragraph.text + "\n"
-
+    for pageNum,imgBlob in enumerate(pages):
+        text = pytesseract.image_to_string(imgBlob,lang='eng')
+            
     return text
+
+# def extract_text_from_file(uploaded_file):
+#     file_extension = uploaded_file.name.split(".")[-1].lower()
+#     text = ""
+
+#     if file_extension == "pdf":
+#         reader = PdfReader(uploaded_file)
+#         for page in reader.pages:
+#             text += page.extract_text() + "\n"
+#     elif file_extension in ["doc", "docx"]:
+#         doc = docx.Document(uploaded_file)
+#         for paragraph in doc.paragraphs:
+#             text += paragraph.text + "\n"
+
+#     return text
 
 def process_file(file_path, embeddings):
     if os.path.isfile(file_path):

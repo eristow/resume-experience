@@ -25,6 +25,9 @@ from langchain.vectorstores import Chroma
 
 from langchain.prompts import ChatPromptTemplate
 
+import pytesseract
+from pdf2image import convert_from_path
+
 
 # '/home/james/models/BAAI/bge-base-en-v1.5'
 BASE_MODEL = '/home/james/models/mistralai/Mistral-7B-Instruct-v0.3'
@@ -72,15 +75,32 @@ class CustomEmbeddings(Embeddings):
         with torch.no_grad():
             outputs = self.model(**tokens)
         return outputs.logits.mean(dim=1).cpu().numpy()
+    
+def pdfimage_text_extract_from_file(uploaded_file):
+    ### my install tesseract
+    # pip install pytesseract
+    # sudo apt-get install tesseract-ocr
+    # import pytesseract
+    # from pdf2image import convert_from_path
+    
+    pages = convert_from_path(uploaded_file, 500)
+
+    for pageNum,imgBlob in enumerate(pages):
+        text = pytesseract.image_to_string(imgBlob,lang='eng')
+            
+    return text
 
 def extract_text_from_file(uploaded_file):
-    file_extension = uploaded_file.name.split(".")[-1].lower()
+    file_extension = uploaded_file.split(".")[-1].lower()
     text = ""
 
     if "pdf" in file_extension:
         reader = PdfReader(uploaded_file)
         for page in reader.pages:
             text += page.extract_text() + "\n"
+        if len(text) <= 1:
+            text = pdfimage_text_extract_from_file(uploaded_file)
+            
     elif file_extension in ["doc", "docx"]:
         doc = docx.Document(uploaded_file)
         for paragraph in doc.paragraphs:
@@ -109,19 +129,6 @@ def process_file(file_path, embeddings):
     return None
 
 
-# Function to process each file and return a vectorstore
-def process_file(file, embeddings):
-    try:
-        loader = PyPDFLoader(file)
-        data = loader.load()
-        text_splitter = RecursiveCharacterTextSplitter(chunk_size=7500, chunk_overlap=100)
-        chunks = text_splitter.split_documents(data)
-        vectorstore = Chroma.from_documents(documents=chunks, embedding=embeddings)
-        return vectorstore
-    except Exception as e:
-        st.error(f"Error processing file {file.name}: {e}")
-        st.error(traceback.format_exc())
-        return None
     
     
 # Function to analyze inputs and return relevant information

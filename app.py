@@ -41,8 +41,22 @@ class CustomEmbeddings(Embeddings):
         with torch.no_grad():
             outputs = self.model(**tokens)
         return outputs.logits.mean(dim=1).cpu().numpy()
+    
+def pdfimage_text_extract_from_file(uploaded_file):
+    ### my install tesseract
+    # pip install pytesseract
+    # sudo apt-get install tesseract-ocr
+    import pytesseract
+    from pdf2image import convert_from_path
+    
+    pages = convert_from_path(uploaded_file, 500)
 
-def extract_text_from_file(uploaded_file):
+    for pageNum,imgBlob in enumerate(pages):
+        text = pytesseract.image_to_string(imgBlob,lang='eng')
+            
+    return text
+
+def extract_text_from_file(uploaded_file, file_path):
     file_extension = uploaded_file.name.split(".")[-1].lower()
     text = ""
 
@@ -50,6 +64,9 @@ def extract_text_from_file(uploaded_file):
         reader = PdfReader(uploaded_file)
         for page in reader.pages:
             text += page.extract_text() + "\n"
+        if len(text) <= 1:
+            text = pdfimage_text_extract_from_file(file_path)
+            
     elif file_extension in ["doc", "docx"]:
         doc = docx.Document(uploaded_file)
         for paragraph in doc.paragraphs:
@@ -126,10 +143,11 @@ def main():
         job_file = st.file_uploader("Upload Job Description", type=["pdf", "doc", "docx"], key="job_file")
         if job_file:
             job_file_path = os.path.join("temp_dir", job_file.name)
+            print(job_file_path)
             print('job_file.name: ', job_file.name)
             with open(job_file_path, "wb") as temp_file:
                 temp_file.write(job_file.getbuffer())
-            job_ad_text = extract_text_from_file(job_file)
+            job_ad_text = extract_text_from_file(job_file, job_file_path)
 
     with col2:
         resume_file = st.file_uploader("Upload Resume", type=["pdf", "doc", "docx"], key="resume_file")
@@ -137,7 +155,7 @@ def main():
             resume_file_path = os.path.join("temp_dir", resume_file.name)
             with open(resume_file_path, "wb") as temp_file:
                 temp_file.write(resume_file.getbuffer())
-            resume_text = extract_text_from_file(resume_file)
+            resume_text = extract_text_from_file(resume_file, resume_file_path)
 
     col1.text_area("Job Description", value=job_ad_text, height=300)
     col2.text_area("Resume Text", value=resume_text, height=300)
