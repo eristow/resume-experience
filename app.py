@@ -7,12 +7,14 @@ from tools import CustomEmbeddings, process_file, extract_text_from_file
 import os
 
 # Initialize chat history
-if 'chat_history' not in st.session_state:
+if "chat_history" not in st.session_state:
     st.session_state.chat_history = []
+
 
 # Simple passthrough function
 def passthrough(input_data):
     return input_data
+
 
 # Function to analyze inputs and return relevant information
 def analyze_inputs(job_file_path, resume_file_path, job_ad_text, resume_text):
@@ -20,21 +22,24 @@ def analyze_inputs(job_file_path, resume_file_path, job_ad_text, resume_text):
         # Use the local Mistral model
         embeddings = CustomEmbeddings(model_name="./mistral")
 
-        job_ad_vectorstore = process_file(job_file_path, embeddings)
-        print("after job_ad_vectorstore")
-        # resume_vectorstore = process_file(resume_file_path, embeddings)
+        # TODO: figure out why this is None. Look into process_file func
+        # job_ad_vectorstore = process_file(job_file_path, embeddings)
+        # print("after job_ad_vectorstore")
+        resume_vectorstore = process_file(resume_file_path, embeddings)
         print("after resume_vectorstore")
-        print(f"job_ad_vectorstore: {job_ad_vectorstore}")
-        # print(f"resume_vectorstore: {resume_vectorstore}")
+        # print(f"job_ad_vectorstore: {job_ad_vectorstore}")
+        print(f"resume_vectorstore: {resume_vectorstore}")
 
-        if job_ad_vectorstore and resume_vectorstore:
+        # if job_ad_vectorstore and resume_vectorstore:
+        if resume_vectorstore:
             print("both vectorstores exist")
-            retriever = BM25Retriever(vector_db=job_ad_vectorstore.as_retriever())
+            # TODO: figure out how to combine the two vectorstores and use them in the retriever
+            retriever = resume_vectorstore.as_retriever()
             print("after retriever")
             chain = (
                 {"context": retriever, "question": passthrough}
                 | PROMPT
-                | ChatOllama()
+                | ChatOllama(model="llama3")
                 | passthrough  # Simple output parsing
             )
             print("after chain")
@@ -44,11 +49,14 @@ def analyze_inputs(job_file_path, resume_file_path, job_ad_text, resume_text):
 
     return "Failed to process the files."
 
+
 # Streamlit UI components
 def main():
     st.title("Resume Experience Analyzer")
 
-    st.write("This app will compare a job description to a resume and extract the number of years of relevant work experience from the resume.")
+    st.write(
+        "This app will compare a job description to a resume and extract the number of years of relevant work experience from the resume."
+    )
 
     col1, col2 = st.columns(2)
 
@@ -56,7 +64,9 @@ def main():
     resume_text = ""
 
     with col1:
-        job_file = st.file_uploader("Upload Job Description", type=["pdf", "doc", "docx"], key="job_file")
+        job_file = st.file_uploader(
+            "Upload Job Description", type=["pdf", "doc", "docx"], key="job_file"
+        )
         if job_file:
             job_file_path = os.path.join("temp_dir", job_file.name)
             with open(job_file_path, "wb") as temp_file:
@@ -64,7 +74,9 @@ def main():
             job_ad_text = extract_text_from_file(job_file, job_file_path)
 
     with col2:
-        resume_file = st.file_uploader("Upload Resume", type=["pdf", "doc", "docx"], key="resume_file")
+        resume_file = st.file_uploader(
+            "Upload Resume", type=["pdf", "doc", "docx"], key="resume_file"
+        )
         if resume_file:
             resume_file_path = os.path.join("temp_dir", resume_file.name)
             with open(resume_file_path, "wb") as temp_file:
@@ -76,8 +88,10 @@ def main():
 
     if st.button("Analyze"):
         with st.spinner("Processing..."):
-            result = analyze_inputs(job_file_path, resume_file_path, job_ad_text, resume_text)
-            st.write(result)
+            result = analyze_inputs(
+                job_file_path, resume_file_path, job_ad_text, resume_text
+            )
+            st.write(result.content)
 
     # Display output experience
     st.subheader("Output Experience")
@@ -89,21 +103,26 @@ def main():
     user_input = st.text_input("Ask a question:")
 
     if st.button("Submit Query"):
-        if 'chat_history' not in st.session_state:
-            st.session_state['chat_history'] = [{"role": "system", "content": "You are a helpful assistant."}]
-        
-        st.session_state['chat_history'].append({"role": "user", "content": user_input})
-        
+        if "chat_history" not in st.session_state:
+            st.session_state["chat_history"] = [
+                {"role": "system", "content": "You are a helpful assistant."}
+            ]
+
+        st.session_state["chat_history"].append({"role": "user", "content": user_input})
+
         response = ChatOllama().invoke(user_input)
-        st.session_state['chat_history'].append({"role": "assistant", "content": response})
-        
-        for chat in st.session_state['chat_history']:
+        st.session_state["chat_history"].append(
+            {"role": "assistant", "content": response}
+        )
+
+        for chat in st.session_state["chat_history"]:
             st.write(f"{chat['role']}: {chat['content']}")
+
 
 # Define the query prompt
 QUERY_PROMPT = PromptTemplate(
     input_variables=["question"],
-    template="""Based on the [Job Description] and the provided [Resume], extract the number of years of relevant experience from the resume. Provide your answer in the following format: 'The candidate has X years of relevant experience for this role.' Replace X with the actual number of years. The output should be in years to the closest 0.5 year."""
+    template="""Based on the [Job Description] and the provided [Resume], extract the number of years of relevant experience from the resume. Provide your answer in the following format: 'The candidate has X years of relevant experience for this role.' Replace X with the actual number of years. The output should be in years to the closest 0.5 year.""",
 )
 
 # Define the RAG prompt
@@ -119,4 +138,5 @@ if __name__ == "__main__":
     main()
     # Clean up the temporary directory after the app closes
     import shutil
+
     shutil.rmtree("temp_dir")
