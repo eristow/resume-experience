@@ -14,9 +14,17 @@ Compare a job description to a resume and extract the number of years of relevan
 
   - https://poppler.freedesktop.org/
 
+  ```bash
+  sudo apt install -y poppler-utils
+  ```
+
 - tesseract:
 
   - https://tesseract-ocr.github.io/tessdoc/Installation.html
+
+  ```bash
+  sudo apt install tesseract-ocr
+  ```
 
 - Mistral:
 
