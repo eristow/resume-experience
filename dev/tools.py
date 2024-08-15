@@ -68,6 +68,7 @@ class CustomEmbeddings(Embeddings):
             with torch.no_grad():
                 outputs = self.model(**tokens)
             embeddings.append(outputs.logits.mean(dim=1).cpu().numpy())
+        print(type(embeddings))
         return embeddings
 
     def embed_query(self, query):
@@ -75,6 +76,9 @@ class CustomEmbeddings(Embeddings):
         with torch.no_grad():
             outputs = self.model(**tokens)
         return outputs.logits.mean(dim=1).cpu().numpy()
+    
+    def __call__(self, input):
+        return self.embed_documents(input)    # <--- get the embeddings
     
 def pdfimage_text_extract_from_file(uploaded_file):
     ### my install tesseract
