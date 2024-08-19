@@ -22,24 +22,26 @@ def analyze_inputs(job_file_path, resume_file_path, job_ad_text, resume_text):
         # Use the local Mistral model
         embeddings = CustomEmbeddings(model_name="./mistral")
 
-        # TODO: figure out why this is None. Look into process_file func
-        # job_ad_vectorstore = process_file(job_file_path, embeddings)
-        # print("after job_ad_vectorstore")
+        job_ad_vectorstore = process_file(job_file_path, embeddings)
+        print("after job_ad_vectorstore")
         resume_vectorstore = process_file(resume_file_path, embeddings)
         print("after resume_vectorstore")
-        # print(f"job_ad_vectorstore: {job_ad_vectorstore}")
+        print(f"job_ad_vectorstore: {job_ad_vectorstore}")
         print(f"resume_vectorstore: {resume_vectorstore}")
 
-        # if job_ad_vectorstore and resume_vectorstore:
-        if resume_vectorstore:
+        if job_ad_vectorstore and resume_vectorstore:
             print("both vectorstores exist")
-            # TODO: figure out how to combine the two vectorstores and use them in the retriever
-            retriever = resume_vectorstore.as_retriever()
+            resume_retriever = resume_vectorstore.as_retriever()
+            job_ad_retriever = job_ad_vectorstore.as_retriever()
             print("after retriever")
             chain = (
-                {"context": retriever, "question": passthrough}
+                {
+                    "resume_context": resume_retriever,
+                    "job_ad_context": job_ad_retriever,
+                    "question": lambda x: QUERY_PROMPT,
+                }
                 | PROMPT
-                | ChatOllama(model="llama3")
+                | ChatOllama(model="mistral:v0.3", temperature=0.3)
                 | passthrough  # Simple output parsing
             )
             print("after chain")
@@ -92,11 +94,13 @@ def main():
                 job_file_path, resume_file_path, job_ad_text, resume_text
             )
             st.write(result.content)
+            # TODO: Format output and display in Output Experience section
 
     # Display output experience
     st.subheader("Output Experience")
     st.write("Overall Experience: X years")
     st.write("Relevant Experience: X years")
+    st.write("Notes: ...")
 
     # Chatbot feature
     st.subheader("Chatbot Feature")
@@ -110,6 +114,7 @@ def main():
 
         st.session_state["chat_history"].append({"role": "user", "content": user_input})
 
+        # TODO: provide job ad and resume context
         response = ChatOllama().invoke(user_input)
         st.session_state["chat_history"].append(
             {"role": "assistant", "content": response}
@@ -119,16 +124,19 @@ def main():
             st.write(f"{chat['role']}: {chat['content']}")
 
 
+QUERY_PROMPT = "Based on the Job Description and the provided Resume, extract the number of years of relevant experience from the resume. Provide your answer in the following format: 'The candidate has X years of relevant experience for this role.' Replace X with the actual number of years. The output should be in years to the closest 0.5 year."
+
 # Define the query prompt
-QUERY_PROMPT = PromptTemplate(
-    input_variables=["question"],
-    template="""Based on the [Job Description] and the provided [Resume], extract the number of years of relevant experience from the resume. Provide your answer in the following format: 'The candidate has X years of relevant experience for this role.' Replace X with the actual number of years. The output should be in years to the closest 0.5 year.""",
-)
+# QUERY_PROMPT_TEMPLATE = PromptTemplate(
+#     input_variables=["question"],
+#     template="""Based on the [Job Description] and the provided [Resume], extract the number of years of relevant experience from the resume. Provide your answer in the following format: 'The candidate has X years of relevant experience for this role.' Replace X with the actual number of years. The output should be in years to the closest 0.5 year.""",
+# )
 
 # Define the RAG prompt
 PROMPT = ChatPromptTemplate.from_template(
     template="""Answer the question based ONLY on the following context:
-    {context}
+    Resume: {resume_context}
+    Job Description: {job_ad_context}
     Question: {question}"""
 )
 

@@ -116,31 +116,22 @@ def extract_text_from_image(file_path):
 def process_file(file_path, embeddings):
     if os.path.isfile(file_path):
         with open(file_path, "rb") as f:
-            reader = PdfReader(f)
-            text = ""
-            for page in reader.pages:
-                text += page.extract_text()
-            with open("temp_text.txt", "w") as text_file:
-                text_file.write(text)
-            loader = TextLoader("temp_text.txt")
-            data = loader.load()
-            # TODO: this isn't working for job_ad_vectorstore
+            text = extract_text_from_file(f, file_path)
             text_splitter = RecursiveCharacterTextSplitter(
                 chunk_size=7500, chunk_overlap=100
             )
-            chunks = text_splitter.split_documents(data)
+            print(f"text_splitter: {text_splitter}")
+            chunks = text_splitter.split_text(text)
             print(f"chunks: {chunks}")
             if chunks:
-                embeddings_list = embeddings.embed_documents(
-                    [chunk.page_content for chunk in chunks]
-                )
+                embeddings_list = embeddings.embed_documents(chunks)
                 # print(f"embeddings_list: {embeddings_list}")
 
                 if embeddings_list:
                     print(f"embeddings: {embeddings}")
                     try:
-                        vectorstore = Chroma.from_documents(
-                            documents=chunks, embedding=embeddings
+                        vectorstore = Chroma.from_texts(
+                            texts=chunks, embedding=embeddings
                         )
                         print(f"vectorstore: {vectorstore}")
                         return vectorstore

@@ -9,6 +9,9 @@ Compare a job description to a resume and extract the number of years of relevan
   - https://ollama.com
   - https://python.langchain.com/v0.2/docs/integrations/chat/ollama/
     - Setup section
+  ```bash
+  ollama pull mistral:v0.3
+  ```
 
 - poppler:
 
