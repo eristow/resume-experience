@@ -5,6 +5,7 @@ from langchain_community.retrievers import BM25Retriever
 from langchain_community.vectorstores import Chroma
 from tools import CustomEmbeddings, process_file, extract_text_from_file
 import os
+from datetime import datetime
 
 # Initialize chat history
 if "chat_history" not in st.session_state:
@@ -89,7 +90,7 @@ def main():
     col2.text_area("Resume Text", value=resume_text, height=300)
 
     if st.button("Analyze"):
-        with st.spinner("Processing..."):
+        with st.spinner("Processing (this can take a few minutes)..."):
             result = analyze_inputs(
                 job_file_path, resume_file_path, job_ad_text, resume_text
             )
@@ -124,7 +125,7 @@ def main():
             st.write(f"{chat['role']}: {chat['content']}")
 
 
-QUERY_PROMPT = "Based on the Job Description and the provided Resume, extract the number of years of relevant experience from the resume. Provide your answer in the following format: 'The candidate has X years of relevant experience for this role.' Replace X with the actual number of years. The output should be in years to the closest 0.5 year."
+QUERY_PROMPT = f"Based on the Job Description and the provided Resume, extract the number of years of relevant experience from the resume. Provide your answer in the following format: 'The candidate has X years of relevant experience for this role.' Replace X with the actual number of years. The output should be in years to the closest 0.5 year. Only consider relevant years of experience obtained from work and not from skills. For context and accurately calculating years of experience, the current year is {datetime.now().year}."
 
 # Define the query prompt
 # QUERY_PROMPT_TEMPLATE = PromptTemplate(
