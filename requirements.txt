@@ -12,6 +12,8 @@ pytesseract
 python-docx
 pyngrok
 pytest
+pylint
+pep8
 langchain-mistralai
 sentence-transformers
 torch

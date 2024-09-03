@@ -36,6 +36,12 @@ Compare a job description to a resume and extract the number of years of relevan
     ```bash
     python download_model.py
     ```
+  
+  - Ensure the mistral model is in the `src/models` directory:
+
+    ```bash
+    ls src/models
+    ```
 
 - Python packages:
 
