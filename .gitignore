@@ -34,9 +34,9 @@ token.py
 files/
 jj/
 misc/
-src/
 tests/
 uploads/
 venv/
 mistral/
 cuda-repo-ubuntu2404-12-5-local_12.5.1-555.42.06-1_amd64.deb
+temp_text.txt
