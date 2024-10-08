@@ -56,7 +56,7 @@ Compare a job description to a resume and extract the number of years of relevan
 - Start Ollama:
 
   ```bash
-  ollama server
+  ollama serve
   ```
 
 - Run the app:
