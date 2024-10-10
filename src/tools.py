@@ -67,7 +67,7 @@ def analyze_inputs(job_text, resume_text):
                     "question": lambda x: ANALYSIS_QUESTION,
                 }
                 | ANALYSIS_PROMPT
-                | ChatOllama(model="mistral:v0.3", temperature=0.3)
+                | ChatOllama(model="mistral:v0.3", temperature=0.1)
                 | passthrough  # Simple output parsing
             )
             logger.info("After creating chain")
