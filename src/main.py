@@ -6,11 +6,29 @@ This module provides the main function for the Resume Experience Analyzer applic
 
 import os
 import streamlit as st
-from tools import extract_text_from_file, analyze_inputs, get_chat_response
+from tools import (
+    extract_text,
+    extract_text_from_file,
+    analyze_inputs,
+    get_chat_response,
+)
+import logging
+from datetime import datetime
 
 TEMP_DIR = "./temp_dir"
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
-# Initialize chat history
+if "result" not in st.session_state:
+    st.session_state.result = ""
+if "job_ad_retriever" not in st.session_state:
+    st.session_state.job_ad_retriever = None
+if "resume_retriever" not in st.session_state:
+    st.session_state.resume_retriever = None
+if "job_ad_text" not in st.session_state:
+    st.session_state.job_ad_text = ""
+if "resume_text" not in st.session_state:
+    st.session_state.resume_text = ""
 if "chat_history" not in st.session_state:
     st.session_state.chat_history = []
 
@@ -29,9 +47,6 @@ def main():
     Returns:
     None
     """
-    job_ad_retriever = None
-    resume_retriever = None
-
     st.title("Resume Experience Analyzer")
 
     st.write(
@@ -42,63 +57,84 @@ def main():
 
     job_ad_text = ""
     resume_text = ""
+    result = ""
 
-    with col1:
-        job_file = st.file_uploader(
-            "Upload Job Description", type=["pdf", "doc", "docx"], key="job_file"
-        )
-        if job_file:
-            job_file_path = os.path.join(TEMP_DIR, job_file.name)
-            with open(job_file_path, "wb") as temp_file:
-                temp_file.write(job_file.getbuffer())
-            job_ad_text = extract_text_from_file(job_file, job_file_path)
+    with st.form("input_file_form"):
+        with col1:
+            job_ad_file = st.file_uploader(
+                "Upload Job Description", type=["pdf", "doc", "docx"], key="job_ad_file"
+            )
 
-    with col2:
-        resume_file = st.file_uploader(
-            "Upload Resume", type=["pdf", "doc", "docx"], key="resume_file"
-        )
-        if resume_file:
-            resume_file_path = os.path.join(TEMP_DIR, resume_file.name)
-            with open(resume_file_path, "wb") as temp_file:
-                temp_file.write(resume_file.getbuffer())
-            resume_text = extract_text_from_file(resume_file, resume_file_path)
+        with col2:
+            resume_file = st.file_uploader(
+                "Upload Resume", type=["pdf", "doc", "docx"], key="resume_file"
+            )
 
-    col1.text_area("Job Description", value=job_ad_text, height=300)
-    col2.text_area("Resume Text", value=resume_text, height=300)
+        if st.form_submit_button("Extract Text"):
+            start_time = datetime.now()
+            if job_ad_file is None and resume_file is None:
+                st.write("Please upload a job description and a resume first.")
+                return
+
+            job_ad_text = extract_text("job ad", job_ad_file, TEMP_DIR)
+            resume_text = extract_text("resume", resume_file, TEMP_DIR)
+            st.session_state["job_ad_text"] = job_ad_text
+            st.session_state["resume_text"] = resume_text
+
+            logger.info(f"Time spent extracting text: {datetime.now() - start_time}")
+
+
+    col3, col4 = st.columns(2)
+    col3.text_area("Job Description", value=st.session_state["job_ad_text"], height=300)
+    col4.text_area("Resume Text", value=st.session_state["resume_text"], height=300)
 
     if st.button("Analyze"):
+        start_time = datetime.now()
+        st.session_state["result"] = ""
+        st.session_state["job_ad_retriever"] = None
+        st.session_state["resume_retriever"] = None
+
+        job_ad_text = st.session_state["job_ad_text"]
+        resume_text = st.session_state["resume_text"]
+
         with st.spinner("Processing (this can take a few minutes)..."):
-            result, job_ad_retriever_temp, resume_retriever_temp = analyze_inputs(
-                job_file_path, resume_file_path
+            logger.info("job_ad_text: ", job_ad_text[:100])
+            logger.info("resume_text: ", resume_text[:100])
+            if (job_ad_text == "") or (resume_text == ""):
+                st.write("Please upload a job description and a resume first.")
+                return
+
+            result, job_ad_retriever, resume_retriever = analyze_inputs(
+                job_ad_text, resume_text
             )
             st.session_state["result"] = result.content
-            st.session_state["job_ad_retriever"] = job_ad_retriever_temp
-            st.session_state["resume_retriever"] = resume_retriever_temp
+            logger.info(f"result_split: {result.content.split("|")}")
+            st.session_state["job_ad_retriever"] = job_ad_retriever
+            st.session_state["resume_retriever"] = resume_retriever
 
-    if "result" in st.session_state:
-        st.write(st.session_state["result"])
+            logger.info(f"Time spent analyzing: {datetime.now() - start_time}")
 
     # Display output experience
-    # st.subheader("Output Experience")
-    # st.write("Overall Experience: X years")
-    # st.write("Relevant Experience: X years")
-    # st.write("Notes: ...")
+    st.subheader("Output Experience")
+    if st.session_state["result"] != "":
+        split_result = st.session_state["result"].split("|")
+        split_result = [x.strip() for x in split_result]
+        st.write(split_result[0])
+        st.write(split_result[1])
+        st.write(split_result[2])
 
     # Chatbot feature
     st.subheader("Chatbot Feature")
     user_input = st.text_input("Ask a question:")
 
     if st.button("Submit Query"):
-        if ("job_ad_retriever" not in st.session_state) or (
-            "resume_retriever" not in st.session_state
-        ):
+        start_time = datetime.now()
+        job_ad_text = st.session_state["job_ad_text"]
+        resume_text = st.session_state["resume_text"]
+
+        if (job_ad_text == "") or (resume_text == ""):
             st.write("Please upload and analyze a job description and a resume first.")
             return
-
-        if "chat_history" not in st.session_state:
-            st.session_state["chat_history"] = [
-                {"role": "system", "content": "You are a helpful assistant."}
-            ]
 
         st.session_state["chat_history"].append({"role": "User", "content": user_input})
 
@@ -113,6 +149,8 @@ def main():
 
         for chat in st.session_state["chat_history"]:
             st.write(f"{chat['role']}:\n{chat['content']}")
+
+        logger.info(f"Time spent creating chat response: {datetime.now() - start_time}")
 
 
 if __name__ == "__main__":
