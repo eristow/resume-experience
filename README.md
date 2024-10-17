@@ -62,5 +62,5 @@ Compare a job description to a resume and extract the number of years of relevan
 - Run the app:
 
   ```bash
-  streamlit run app.py
+  streamlit run main.py
   ```
