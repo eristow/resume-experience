@@ -34,7 +34,7 @@ token.py
 files/
 jj/
 misc/
-tests/
+# tests/
 uploads/
 venv/
 mistral/

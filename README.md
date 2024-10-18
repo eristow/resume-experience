@@ -64,3 +64,11 @@ Compare a job description to a resume and extract the number of years of relevan
   ```bash
   streamlit run main.py
   ```
+
+## TESTING
+- Run the tests:
+
+  ```bash
+  cd src
+  python -m pytest
+  ```
