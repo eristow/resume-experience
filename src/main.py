@@ -14,10 +14,12 @@ from tools import (
 )
 import logging
 from datetime import datetime
+from langchain_community.chat_models import ChatOllama
 
 TEMP_DIR = "./temp_dir"
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+ollama = ChatOllama(model="mistral:v0.3", temperature=0.3)
 
 if "result" not in st.session_state:
     st.session_state.result = ""
@@ -83,7 +85,6 @@ def main():
 
             logger.info(f"Time spent extracting text: {datetime.now() - start_time}")
 
-
     col3, col4 = st.columns(2)
     col3.text_area("Job Description", value=st.session_state["job_ad_text"], height=300)
     col4.text_area("Resume Text", value=st.session_state["resume_text"], height=300)
@@ -105,7 +106,7 @@ def main():
                 return
 
             result, job_ad_retriever, resume_retriever = analyze_inputs(
-                job_ad_text, resume_text
+                job_ad_text, resume_text, ollama
             )
             st.session_state["result"] = result.content
             logger.info(f"result_split: {result.content.split("|")}")
@@ -141,7 +142,7 @@ def main():
         job_ad_retriever = st.session_state["job_ad_retriever"]
         resume_retriever = st.session_state["resume_retriever"]
         response = get_chat_response(
-            user_input, job_ad_retriever, resume_retriever
+            user_input, job_ad_retriever, resume_retriever, ollama
         ).content
         st.session_state["chat_history"].append(
             {"role": "Assistant", "content": response}

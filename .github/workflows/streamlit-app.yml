@@ -31,6 +31,8 @@ jobs:
       run: |
         source venv/bin/activate
         cd src
+        ls -al
+        ls -al tests
         python -m pytest
 
     - name: Deploy Streamlit
