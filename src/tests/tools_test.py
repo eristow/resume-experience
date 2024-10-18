@@ -12,7 +12,7 @@ import os
 import pytest
 from unittest.mock import Mock, patch, call
 from langchain_community.chat_models import ChatOllama
-from langchain_community.chat_models import FakeListChatModel
+from langchain_community.embeddings import FakeEmbeddings
 
 
 def mock_chat_ollama(input_data):
@@ -183,13 +183,13 @@ class TestExtractTextFromImage:
 class TestProcessText:
     def test_process_text_happy(self):
         text = "Sample text"
-        embeddings = custom_embeddings.CustomEmbeddings(model_name="models/mistral")
+        embeddings = FakeEmbeddings(size=300)
         vectorstore = process_text(text, embeddings)
         assert vectorstore is not None
 
     def test_process_text_with_invalid_text(self):
         text = ""
-        embeddings = custom_embeddings.CustomEmbeddings(model_name="models/mistral")
+        embeddings = FakeEmbeddings(size=300)
         vectorstore = process_text(text, embeddings)
         assert vectorstore is None
 

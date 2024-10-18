@@ -18,3 +18,4 @@ langchain-mistralai
 sentence-transformers
 torch
 transformers
+bitsandbytes
