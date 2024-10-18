@@ -22,6 +22,7 @@ from prompts import (
     passthrough,
 )
 import logging
+import shutil
 
 OCR_LANG = "eng"
 logger = logging.getLogger(__name__)
@@ -96,9 +97,8 @@ def extract_text(file_type, file, temp_dir):
         logger.error(f"Invalid file type: {file_type}")
         return
 
-    file_path = os.path.join(temp_dir, file.name)
-    with open(file_path, "wb") as temp_file:
-        temp_file.write(file.getbuffer())
+    file_path = os.path.join(temp_dir, os.path.basename(file.name))
+    shutil.copyfile(file.name, file_path)
     logger.info(f"Before extracting {file_type} text")
     text = extract_text_from_file(file, file_path)
     logger.info(f"After extracting {file_type} text")
@@ -121,9 +121,8 @@ def extract_text_from_file(uploaded_file, file_path):
 
     if file_extension == "pdf":
         text = extract_text_from_image(file_path)
-    # TODO: test this branch with a doc/docx file
     elif file_extension in ["doc", "docx"]:
-        doc = docx.Document(uploaded_file)
+        doc = docx.Document(file_path)
         for paragraph in doc.paragraphs:
             text += paragraph.text + "\n"
 
