@@ -5,6 +5,7 @@ from tools import (
     analyze_inputs,
     extract_text_from_image,
     process_text,
+    get_chat_response,
 )
 import custom_embeddings
 import os
@@ -181,3 +182,32 @@ class TestProcessText:
         embeddings = None
         vectorstore = process_text(text, embeddings)
         assert vectorstore is None
+
+
+class TestGetChatResponse:
+    @pytest.fixture
+    def mock_vectorstore(self):
+        mock_vs = Mock()
+        mock_retriever = Mock()
+        mock_vs.as_retriever.return_value = mock_retriever
+        return mock_vs
+
+    def test_get_chat_response_happy(self, mock_vectorstore):
+        response = get_chat_response(
+            "Sample text",
+            mock_vectorstore.as_retriever(),
+            mock_vectorstore.as_retriever(),
+        )
+        assert response is not None
+
+    def test_get_chat_response_with_invalid_text(self, mock_vectorstore):
+        response = get_chat_response(
+            "",
+            mock_vectorstore.as_retriever(),
+            mock_vectorstore.as_retriever(),
+        )
+        assert response is None
+
+    def test_get_chat_response_with_invalid_retrievers(self, mock_vectorstore):
+        response = get_chat_response("Sample text", None, None)
+        assert response is None

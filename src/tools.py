@@ -204,6 +204,9 @@ def get_chat_response(user_input, job_ad_retriever, resume_retriever):
     logger.info(f"user_input: {user_input}")
     logger.info(f"resume_retriever: {resume_retriever}")
     logger.info(f"job_ad_retriever: {job_ad_retriever}")
+    if not user_input or not job_ad_retriever or not resume_retriever:
+        return None
+
     chain = (
         {
             "resume_context": resume_retriever,
