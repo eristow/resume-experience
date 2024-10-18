@@ -171,7 +171,7 @@ def process_text(text, embeddings):
     logger.info(f"text_splitter: {text_splitter}")
     chunks = text_splitter.split_text(text)
     logger.info("chunks created from text_splitter")
-    if chunks:
+    if chunks and embeddings:
         embeddings_list = embeddings.embed_documents(chunks)
         logger.info("embeddings_list created")
 

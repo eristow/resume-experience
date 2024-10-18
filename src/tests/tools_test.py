@@ -4,6 +4,7 @@ from tools import (
     extract_text_from_file,
     analyze_inputs,
     extract_text_from_image,
+    process_text,
 )
 import custom_embeddings
 import os
@@ -12,6 +13,7 @@ from unittest.mock import Mock, patch, call
 from langchain_community.chat_models import ChatOllama
 
 
+# TODO: add tests for process_text() and get_chat_response()
 class TestAnalyzeInputs:
     """Testing analyze_inputs function."""
 
@@ -159,3 +161,23 @@ class TestExtractTextFromImage:
 
     def test_blank_image(self):
         assert extract_text_from_image("tests/blank.pdf") == ""
+
+
+class TestProcessText:
+    def test_process_text_happy(self):
+        text = "Sample text"
+        embeddings = custom_embeddings.CustomEmbeddings(model_name="models/mistral")
+        vectorstore = process_text(text, embeddings)
+        assert vectorstore is not None
+
+    def test_process_text_with_invalid_text(self):
+        text = ""
+        embeddings = custom_embeddings.CustomEmbeddings(model_name="models/mistral")
+        vectorstore = process_text(text, embeddings)
+        assert vectorstore is not None
+
+    def test_process_text_with_invalid_embeddings(self):
+        text = "Sample text"
+        embeddings = None
+        vectorstore = process_text(text, embeddings)
+        assert vectorstore is None
