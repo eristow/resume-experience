@@ -98,7 +98,14 @@ def extract_text(file_type, file, temp_dir):
         return
 
     file_path = os.path.join(temp_dir, os.path.basename(file.name))
-    shutil.copyfile(file.name, file_path)
+    # This is for testing purposes...
+    file_test = open("tests/test.pdf", "r")
+    if type(file) is type(file_test):
+        shutil.copyfile(file.name, file_path)
+    else:
+        with open(file_path, "wb") as temp_file:
+            temp_file.write(file.getbuffer())
+
     logger.info(f"Before extracting {file_type} text")
     text = extract_text_from_file(file, file_path)
     logger.info(f"After extracting {file_type} text")

@@ -99,12 +99,18 @@ def main():
         resume_text = st.session_state["resume_text"]
 
         with st.spinner("Processing (this can take a few minutes)..."):
-            logger.info("job_ad_text: ", job_ad_text[:100])
-            logger.info("resume_text: ", resume_text[:100])
             if (job_ad_text == "") or (resume_text == ""):
                 st.write("Please upload a job description and a resume first.")
                 return
 
+            job_ad_text_log = (
+                job_ad_text[:100] if len(job_ad_text) > 100 else job_ad_text
+            )
+            resume_text_log = (
+                resume_text[:100] if len(resume_text) > 100 else resume_text
+            )
+            logger.info(f"job_ad_text: %s", job_ad_text_log)
+            logger.info(f"resume_text: %s", resume_text_log)
             result, job_ad_retriever, resume_retriever = analyze_inputs(
                 job_ad_text, resume_text, ollama
             )
