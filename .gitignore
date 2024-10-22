@@ -14,6 +14,7 @@ site/
 
 # Tools
 token.py
+model_token.py
 
 # VS Code settings
 .vscode/
@@ -34,10 +35,11 @@ token.py
 files/
 jj/
 misc/
-tests/
+# tests/
 uploads/
 venv/
 mistral/
 cuda-repo-ubuntu2404-12-5-local_12.5.1-555.42.06-1_amd64.deb
 temp_text.txt
 temp_dir/
+src/temp_dir/
