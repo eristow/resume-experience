@@ -1,4 +1,3 @@
-from streamlit.testing.v1 import AppTest
 from tools import (
     extract_text,
     extract_text_from_file,

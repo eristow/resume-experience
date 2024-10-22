@@ -42,4 +42,5 @@ jobs:
     - name: Deploy Streamlit
       run: |
         source venv/bin/activate
-        nohup streamlit run Predict_prior_experience.py &
+        cd src
+        nohup streamlit run main.py &
