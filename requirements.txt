@@ -1,3 +1,30 @@
+# streamlit
+# langchain
+# langchain-community
+# langchain-chroma
+# llama-index
+# llama-index-embeddings-huggingface
+# llama-index-embeddings-instructor
+# chromadb==0.5.5
+# pdf2image
+# PyPDF2
+# pytesseract
+# python-docx
+# pyngrok
+# pytest
+# pylint
+# pep8
+# langchain-mistralai
+# sentence-transformers
+# torch --index-url https://download.pytorch.org/whl/cu115
+# transformers
+# bitsandbytes>=0.41.1
+# accelerate
+# six
+# pyopenssl
+# ndg-httpsclient
+# pyasn1
+
 streamlit
 langchain
 langchain-community
@@ -5,7 +32,7 @@ langchain-chroma
 llama-index
 llama-index-embeddings-huggingface
 llama-index-embeddings-instructor
-chromadb
+chromadb==0.5.5
 pdf2image
 PyPDF2
 pytesseract
@@ -16,6 +43,6 @@ pylint
 pep8
 langchain-mistralai
 sentence-transformers
-torch
 transformers
-bitsandbytes
+accelerate
+six

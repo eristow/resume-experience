@@ -2,7 +2,46 @@
 
 Compare a job description to a resume and extract the number of years of relevant work experience from the resume.
 
-## PRE-REQs
+
+## RUN APP WITH DOCKER
+### PRE-REQS
+- Docker:
+
+  - https://docs.docker.com/get-docker/
+
+- Docker Compose:
+
+  - https://docs.docker.com/compose/install/
+
+### RUNNING THE APP
+- Build the app with Docker Compose:
+  
+    ```bash
+    docker-compose build
+    ```
+
+- Start the app with Docker Compose:
+
+  ```bash
+  docker-compose up
+  ```
+
+- Build the Docker image:
+
+  ```bash
+  docker build --platform linux/amd64 -t resume_experience_streamlit -f streamlit.Dockerfile .
+  docker build --platform linux/amd64 -t resume_experience_ollama -f ollama.Dockerfile .
+  ```
+
+- Start an individual container:
+  ```bash
+  docker run --gpus all -p 8501:8501 -v src/models:/models resume_experience_streamlit
+  docker run -p 11434:11434 resume_experience_ollama
+  ```
+
+
+## RUN APP LOCALLY:
+### PRE-REQs
 
 - Ollama:
 
@@ -51,7 +90,7 @@ Compare a job description to a resume and extract the number of years of relevan
     pip install -r requirements.txt
     ```
 
-## RUNNING THE APP
+### RUNNING THE APP
 
 - Start Ollama:
 
@@ -65,7 +104,7 @@ Compare a job description to a resume and extract the number of years of relevan
   streamlit run main.py
   ```
 
-## TESTING
+### TESTING
 - Run the tests:
 
   ```bash

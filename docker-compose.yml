@@ -1,0 +1,67 @@
+services:
+  streamlit:
+    container_name: streamlit
+
+    image: resume_experience_streamlit
+
+    platform: linux/amd64
+
+    build:
+      context: .
+      dockerfile: streamlit.Dockerfile
+
+    depends_on:
+      ollama:
+        condition: service_healthy
+
+    ports:
+      - '8501:8501'
+
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - capabilities: [gpu]
+
+    volumes:
+      - ./src/models:/models
+
+    healthcheck:
+      test: ['CMD-SHELL', 'curl localhost:8501/_stcore/health']
+      interval: 60s
+      timeout: 30s
+      retries: 5
+      start_period: 15s
+
+  ollama:
+    container_name: ollama
+
+    image: resume_experience_ollama
+
+    platform: linux/amd64
+
+    build:
+      context: .
+      dockerfile: ollama.Dockerfile
+
+    ports:
+      - '11434:11434'
+
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - capabilities: [gpu]
+
+    command: ollama serve && ollama run mistral
+
+    healthcheck:
+      test: ['CMD-SHELL', 'curl localhost:11434']
+      interval: 60s
+      timeout: 30s
+      retries: 5
+      start_period: 15s
+
+# Define named volume
+volumes:
+  ml-models:
