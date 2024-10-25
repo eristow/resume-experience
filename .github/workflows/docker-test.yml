@@ -50,6 +50,8 @@ jobs:
           cache-to: type=gha,mode=max
 
       - name: Test container startup
+        env:
+          OLLAMA_BASE_URL: http://localhost:11434
         run: |
           docker run --gpus all -d --name test-container -p ${{ matrix.health-check-port }}:${{ matrix.health-check-port }} ${{ matrix.image-name }}:test
           # Wait for container to start

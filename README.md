@@ -114,5 +114,8 @@ Compare a job description to a resume and extract the number of years of relevan
 
 ## TODO:
 - [ ] Add GHA for building images and running containers
-- [ ] Create separate dev/prod docker-compose files
-  - Have hot-reload only in dev
+- [ ] For prod, 
+- [ ] Split up the tuned Mistral model from the Streamlit container
+  - 3 total containers: Streamlit, Ollama, Mistral
+  - Streamlit will have to make API calls to Mistral
+  - Mistral container will have a light API wrapper around the model
