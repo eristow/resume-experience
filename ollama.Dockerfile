@@ -1,6 +1,10 @@
 # Use the base image
 FROM ollama/ollama
 
+LABEL maintainer="eristow"
+LABEL version="1.0"
+LABEL description="Ollama Dockerfile with Mistral for resume-experience app"
+
 # Set up the necessary environment variables and configurations
 ENV NVIDIA_VISIBLE_DEVICES=all
 
@@ -16,10 +20,11 @@ RUN apt-get update && \
 	apt-get install --no-install-recommends --assume-yes \
 	curl
 
-# Pull the mistral model
+# Start server, wait for it, and pull model during build
 RUN ollama serve & \
-	curl --retry 10 --retry-connrefused --retry-delay 1 http://localhost:11434/ && \
-	curl -X POST -d '{"name": "mistral"}' http://localhost:11434/api/pull
+	timeout 60s bash -c 'until curl -s http://localhost:11434/api/tags >/dev/null 2>&1; do sleep 1; done' && \
+	ollama pull mistral:v0.3 && \
+	pkill ollama
 
 # Copy the entrypoint script into the image
 COPY ollama-docker-entrypoint.sh /usr/local/bin/entrypoint.sh
@@ -30,5 +35,4 @@ RUN chmod +x /usr/local/bin/entrypoint.sh
 HEALTHCHECK CMD curl --fail http://localhost:11434/api
 
 # Run the mistral server
-# CMD ["ollama", "serve", "&&", "ollama", "run", "mistral"]
 ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]

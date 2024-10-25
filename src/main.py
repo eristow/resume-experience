@@ -15,11 +15,21 @@ from tools import (
 import logging
 from datetime import datetime
 from langchain_community.chat_models import ChatOllama
+from dotenv import load_dotenv
 
-TEMP_DIR = "./temp_dir"
+TEMP_DIR = "/tmp"
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
-ollama = ChatOllama(model="mistral:v0.3", temperature=0.3)
+
+load_dotenv()
+OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL")
+ollama = ChatOllama(
+    model="mistral:v0.3",
+    temperature=0.3,
+    base_url=OLLAMA_BASE_URL,
+    context_window=2048,
+    num_ctx=2048,
+)
 
 if "result" not in st.session_state:
     st.session_state.result = ""

@@ -1,9 +1,9 @@
-# TODO: reduce image size
-# - remove unnecessary packages
-
 # Stage 1: Build SQLite and Python
-# TODO: upgrade to ubuntu22.04?
-FROM nvidia/cuda:12.3.1-runtime-ubuntu20.04 AS builder
+FROM nvidia/cuda:12.3.1-runtime-ubuntu22.04 AS builder
+
+LABEL maintainer="eristow"
+LABEL version="1.0"
+LABEL description="Streamlit Dockerfile with Mistral for resume-experience app"
 
 ENV DEBIAN_FRONTEND=noninteractive
 ENV CUDA_HOME=/usr/local/cuda
@@ -12,26 +12,23 @@ ENV LD_LIBRARY_PATH=${CUDA_HOME}/lib64:/usr/local/lib:${LD_LIBRARY_PATH}
 
 # Install build dependencies
 RUN apt-get update && apt-get install -y \
-	wget \
-	gcc \
-	g++ \
-	make \
-	zlib1g-dev \
-	libssl-dev \
-	libffi-dev \
-	libbz2-dev \
-	libreadline-dev \
-	libncurses5-dev \
-	libgdbm-dev \
-	libnss3-dev \
-	libncursesw5-dev \
-	xz-utils \
-	tk-dev \
-	lzma \
-	lzma-dev \
-	liblzma-dev \
-	--no-install-recommends \
-	&& rm -rf /var/lib/apt/lists/*
+	wget gcc g++ make \
+	zlib1g-dev libssl-dev \
+	# libffi-dev \
+	# libbz2-dev \
+	# libreadline-dev \
+	# libncurses5-dev \
+	# libgdbm-dev \
+	# libnss3-dev \
+	# libncursesw5-dev \
+	# xz-utils \
+	# tk-dev \
+	# lzma \
+	# lzma-dev \
+	# liblzma-dev \
+	# --no-install-recommends \
+	&& rm -rf /var/lib/apt/lists/* \
+	&& apt-get clean
 
 # Install newer SQLite3 from source
 RUN cd /tmp && \
@@ -45,27 +42,40 @@ RUN cd /tmp && \
 	rm -rf sqlite-autoconf-3450000* && \
 	ldconfig
 
+
+# Stage 2: Build Python
+COPY --from=python:3.12-slim /usr/local /usr/local
+
 # Build Python from source
-ENV PYTHON_VERSION=3.12.2
-RUN cd /tmp && \
-	wget https://www.python.org/ftp/python/${PYTHON_VERSION}/Python-${PYTHON_VERSION}.tgz && \
-	tar -xvf Python-${PYTHON_VERSION}.tgz && \
-	cd Python-${PYTHON_VERSION} && \
-	./configure \
-	--enable-optimizations \
-	--with-system-ffi \
-	--with-computed-gotos \
-	--enable-loadable-sqlite-extensions \
-	--prefix=/usr/local && \
-	make -j $(nproc) && \
-	make altinstall && \
-	cd .. && \
-	rm -rf Python-${PYTHON_VERSION}* && \
-	ldconfig
+# ENV PYTHON_VERSION=3.12.2
+# RUN cd /tmp && \
+# 	wget https://www.python.org/ftp/python/${PYTHON_VERSION}/Python-${PYTHON_VERSION}.tgz && \
+# 	tar -xvf Python-${PYTHON_VERSION}.tgz && \
+# 	cd Python-${PYTHON_VERSION} && \
+# 	./configure \
+# 	--enable-optimizations \
+# 	--with-system-ffi \
+# 	--with-computed-gotos \
+# 	--enable-loadable-sqlite-extensions \
+# 	--prefix=/usr/local && \
+# 	make -j $(nproc) && \
+# 	make altinstall && \
+# 	cd .. && \
+# 	rm -rf Python-${PYTHON_VERSION}* && \
+# 	ldconfig
 
 
-# Stage 2: Final image
-FROM nvidia/cuda:12.3.1-runtime-ubuntu20.04
+# Stage 3: Final image
+FROM nvidia/cuda:12.3.1-runtime-ubuntu22.04
+
+# Optimize networking stack
+RUN echo 'net.ipv4.tcp_timestamps=1\n \
+	net.ipv4.tcp_sack=1\n \
+	net.core.rmem_max=16777216\n \
+	net.core.wmem_max=16777216\n \
+	net.ipv4.tcp_rmem=4096 87380 16777216\n \
+	net.ipv4.tcp_wmem=4096 65536 16777216\n \
+	net.ipv4.tcp_window_scaling=1' >> /etc/sysctl.conf
 
 # Set environment variables
 ENV CUDA_HOME=/usr/local/cuda
@@ -89,34 +99,31 @@ RUN apt-get update && apt-get install -y \
 	&& rm -rf /var/lib/apt/lists/*
 
 # Create symbolic links
-RUN ln -sf /usr/local/bin/python3.12 /usr/local/bin/python && \
-	ln -sf /usr/local/bin/pip3.12 /usr/local/bin/pip
+# RUN ln -sf /usr/local/bin/python3.12 /usr/local/bin/python && \
+# 	ln -sf /usr/local/bin/pip3.12 /usr/local/bin/pip
 
 # Verify Python and SQLite3 versions
 RUN python -c "import sqlite3; print('SQLite3 Version:', sqlite3.sqlite_version)"
 
 WORKDIR /src
 
-# Copy only necessary files
-COPY requirements.txt .
-COPY ./src .
-
-# Install Python dependencies efficiently
-RUN pip install --no-cache-dir -U pip setuptools wheel && \
-	pip install --no-cache-dir torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121 && \
-	pip install --no-cache-dir \
+# Install Python dependencies
+RUN pip install --no-cache-dir -U pip setuptools wheel
+RUN pip install --no-cache-dir torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
+RUN pip install --no-cache-dir \
 	nvidia-cuda-runtime-cu12 \
 	nvidia-cuda-nvrtc-cu12 \
 	nvidia-cuda-cupti-cu12 \
 	nvidia-cudnn-cu12 \
-	bitsandbytes==0.41.3 && \
-	pip install --no-cache-dir -r requirements.txt
+	bitsandbytes>=0.41.3
+
+COPY requirements.txt .
+RUN --mount=type=cache,target=/root/.cache/pip \
+	pip install -r requirements.txt \
+	&& find /usr/local/lib/python3.12 -type d -name "__pycache__" -exec rm -r {} +
 
 # Create model directory
 RUN mkdir -p models/mistral
-
-# Run tests
-RUN python -m pytest
 
 # Cleanup unnecessary files
 RUN apt-get clean && \

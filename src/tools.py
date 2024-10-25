@@ -27,6 +27,21 @@ OCR_LANG = "eng"
 logger = logging.getLogger(__name__)
 
 
+def verify_input_size(text):
+    """
+    Verify the input size and log details about token count.
+    """
+    # Rough approximation: 1 token ~= 4 characters for English text
+    estimated_tokens = len(text.split())
+    # logger.info(f"Estimated token count: {estimated_tokens}")
+
+    if estimated_tokens > 1800:  # Leave some room for the prompt
+        logger.warning(
+            f"Input may be too large for context window (estimated {estimated_tokens} tokens)"
+        )
+    return estimated_tokens
+
+
 def analyze_inputs(job_text, resume_text, ollama):
     """
     Analyzes the inputs by processing the job text and resume text using the Mistral model.
@@ -48,6 +63,12 @@ def analyze_inputs(job_text, resume_text, ollama):
     resume_retriever = None
 
     if job_text and resume_text:
+        job_tokens = verify_input_size(job_text)
+        resume_tokens = verify_input_size(resume_text)
+
+        logger.info(f"Job description tokens: {job_tokens}")
+        logger.info(f"Resume tokens: {resume_tokens}")
+
         # Use the local Mistral model
         embeddings = CustomEmbeddings(model_name="./models/mistral")
 
@@ -97,6 +118,7 @@ def extract_text(file_type, file, temp_dir):
         logger.error(f"Invalid file type: {file_type}")
         return
 
+    logger.info(f"Extracting {file_type} text")
     file_path = os.path.join(temp_dir, os.path.basename(file.name))
     # This is for testing purposes...
     file_test = open("tests/test.pdf", "r")
@@ -174,7 +196,12 @@ def process_text(text, embeddings):
     Raises:
         Exception: If an error occurs while creating the vectorstore.
     """
-    text_splitter = RecursiveCharacterTextSplitter(chunk_size=7500, chunk_overlap=100)
+    text_splitter = RecursiveCharacterTextSplitter(
+        chunk_size=2048,
+        chunk_overlap=200,
+        length_function=lambda x: len(x.split()),
+        separators=["\n\n", "\n", " ", ""],
+    )
     logger.info(f"text_splitter: {text_splitter}")
     chunks = text_splitter.split_text(text)
     logger.info("chunks created from text_splitter")

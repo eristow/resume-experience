@@ -2,12 +2,15 @@ name: Deploy Streamlit App
 
 on:
   push:
-    branches:
-      - main
-      - feature/**
+    branches: [ "main", "feature/**" ]
+    paths:
+      - 'src/**'
+      - 'requirements.txt'
   pull_request:
-    branches:
-      - main
+    branches: [ "main" ]
+    paths:
+      - 'src/**'
+      - 'requirements.txt'
 
 jobs:
   build:

@@ -4,7 +4,7 @@ services:
 
     image: resume_experience_streamlit
 
-    platform: linux/amd64
+    init: true
 
     build:
       context: .
@@ -25,6 +25,11 @@ services:
 
     volumes:
       - ./src/models:/models
+      - ./src:/src:ro
+
+    environment:
+      - WATCHDOG_TIMEOUT=10
+      - STREAMLIT_SERVER_RUN_ON_SAVE=true
 
     healthcheck:
       test: ['CMD-SHELL', 'curl localhost:8501/_stcore/health']
@@ -38,7 +43,7 @@ services:
 
     image: resume_experience_ollama
 
-    platform: linux/amd64
+    init: true
 
     build:
       context: .
@@ -53,15 +58,9 @@ services:
           devices:
             - capabilities: [gpu]
 
-    command: ollama serve && ollama run mistral
-
     healthcheck:
       test: ['CMD-SHELL', 'curl localhost:11434']
       interval: 60s
       timeout: 30s
       retries: 5
       start_period: 15s
-
-# Define named volume
-volumes:
-  ml-models:
