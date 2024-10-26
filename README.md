@@ -111,11 +111,3 @@ Compare a job description to a resume and extract the number of years of relevan
   cd src
   python -m pytest
   ```
-
-## TODO:
-- [ ] Add GHA for building images and running containers
-- [ ] For prod, 
-- [ ] Split up the tuned Mistral model from the Streamlit container
-  - 3 total containers: Streamlit, Ollama, Mistral
-  - Streamlit will have to make API calls to Mistral
-  - Mistral container will have a light API wrapper around the model

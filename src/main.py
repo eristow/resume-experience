@@ -27,8 +27,7 @@ ollama = ChatOllama(
     model="mistral:v0.3",
     temperature=0.3,
     base_url=OLLAMA_BASE_URL,
-    context_window=2048,
-    num_ctx=2048,
+    num_ctx=4096,
 )
 
 if "result" not in st.session_state:

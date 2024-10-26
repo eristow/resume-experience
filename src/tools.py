@@ -27,19 +27,58 @@ OCR_LANG = "eng"
 logger = logging.getLogger(__name__)
 
 
-def verify_input_size(text):
+def verify_input_size(job_text, resume_text):
     """
-    Verify the input size and log details about token count.
-    """
-    # Rough approximation: 1 token ~= 4 characters for English text
-    estimated_tokens = len(text.split())
-    # logger.info(f"Estimated token count: {estimated_tokens}")
+    Verify the input size and estimate total tokens including prompt overhead.
 
-    if estimated_tokens > 1800:  # Leave some room for the prompt
-        logger.warning(
-            f"Input may be too large for context window (estimated {estimated_tokens} tokens)"
+    Args:
+        job_text (str): The job text to verify
+        resume_text (str): The resume text to verify
+
+    Returns:
+        int: Estimated total tokens including prompt overhead
+
+    Raises:
+        ValueError: If the total estimated tokens would exceed context window
+    """
+    CONTEXT_WINDOW = 4096
+    CHUNK_SIZE = 1024
+    CHUNK_OVERLAP = 200
+    TIMESTAMP_TOKENS = 15  # Approximate tokens for datetime
+
+    ANALYSIS_PROMPT_TOKENS = len(ANALYSIS_QUESTION)
+    CHAT_PROMPT_TOKENS = len(CHAT_QUESTION)
+
+    estimated_text_tokens = len(job_text.split()) + len(resume_text.split())
+
+    # Calculate chunks needed
+    num_chunks = max(
+        1, (estimated_text_tokens + CHUNK_OVERLAP) // (CHUNK_SIZE - CHUNK_OVERLAP)
+    )
+    total_chunk_tokens = num_chunks * CHUNK_SIZE
+
+    prompt_overhead = ANALYSIS_PROMPT_TOKENS + TIMESTAMP_TOKENS
+    total_tokens = total_chunk_tokens + prompt_overhead
+
+    # Log the breakdown
+    logger = logging.getLogger(__name__)
+    logger.info(f"Text tokens: {estimated_text_tokens}")
+    logger.info(f"Number of chunks: {num_chunks}")
+    logger.info(f"Total chunk tokens: {total_chunk_tokens}")
+    logger.info(f"Prompt overhead: {prompt_overhead}")
+    logger.info(f"Total estimated tokens: {total_tokens}")
+
+    # Verify against context window
+    max_safe_tokens = CONTEXT_WINDOW - 100  # Leave buffer for response
+    if total_tokens > max_safe_tokens:
+        raise ValueError(
+            f"Input would require approximately {total_tokens} tokens, "
+            f"exceeding the {CONTEXT_WINDOW} token context window. "
+            f"Please reduce the input size by about "
+            f"{((total_tokens - max_safe_tokens) / total_tokens * 100):.1f}%"
         )
-    return estimated_tokens
+
+    return total_tokens
 
 
 def analyze_inputs(job_text, resume_text, ollama):
@@ -63,11 +102,17 @@ def analyze_inputs(job_text, resume_text, ollama):
     resume_retriever = None
 
     if job_text and resume_text:
-        job_tokens = verify_input_size(job_text)
-        resume_tokens = verify_input_size(resume_text)
+        try:
+            total_tokens = verify_input_size(job_text, resume_text)
 
-        logger.info(f"Job description tokens: {job_tokens}")
-        logger.info(f"Resume tokens: {resume_tokens}")
+            logger.info(f"Total tokens (with overhead): {total_tokens}")
+        except ValueError as e:
+            logger.error(f"Input size verification failed: {e}")
+            return (
+                "Input too large. Please reduce the size of the job description or resume.",
+                None,
+                None,
+            )
 
         # Use the local Mistral model
         embeddings = CustomEmbeddings(model_name="./models/mistral")
@@ -197,7 +242,7 @@ def process_text(text, embeddings):
         Exception: If an error occurs while creating the vectorstore.
     """
     text_splitter = RecursiveCharacterTextSplitter(
-        chunk_size=2048,
+        chunk_size=1024,
         chunk_overlap=200,
         length_function=lambda x: len(x.split()),
         separators=["\n\n", "\n", " ", ""],
@@ -235,7 +280,6 @@ def get_chat_response(user_input, job_ad_retriever, resume_retriever, ollama):
     Returns:
         str: The chat response.
     """
-    # Rest of the code...
     logger.info(f"user_input: {user_input}")
     logger.info(f"resume_retriever: {resume_retriever}")
     logger.info(f"job_ad_retriever: {job_ad_retriever}")
