@@ -20,7 +20,7 @@ on:
 
 jobs:
   test-individual-builds:
-    runs-on: ubuntu-latest-xlarge
+    runs-on: ubuntu-latest
     strategy:
       matrix:
         docker-file: ['ollama.Dockerfile', 'streamlit.Dockerfile']
@@ -69,7 +69,7 @@ jobs:
 
   test-docker-compose:
     needs: test-individual-builds
-    runs-on: ubuntu-latest-xlarge
+    runs-on: ubuntu-latest
     
     steps:
       - name: Checkout repository
