@@ -21,18 +21,34 @@ class CustomEmbeddings(Embeddings):
         tokenizer (AutoTokenizer): The tokenizer for tokenizing input text.
     """
 
+    _model = None
+    _tokenizer = None
+
     def __init__(self, model_name):
-        quant_config = BitsAndBytesConfig(
-            load_in_4bit=True,
-            bnb_4bit_quant_type="nf4",
-            bnb_4bit_compute_dtype=torch.bfloat16,
-            bnb_4bit_use_double_quant=True,
-        )
-        self.model = AutoModelForCausalLM.from_pretrained(
-            model_name, output_hidden_states=True, quantization_config=quant_config
-        )
-        self.tokenizer = AutoTokenizer.from_pretrained(model_name)
-        self.tokenizer.pad_token = self.tokenizer.eos_token
+        self.model_name = model_name
+
+    @classmethod
+    def get_model(cls, model_name):
+        """Singleton pattern to reuse model across instances"""
+        if cls._model is None:
+            quant_config = BitsAndBytesConfig(
+                load_in_4bit=True,
+                bnb_4bit_quant_type="nf4",
+                bnb_4bit_compute_dtype=torch.bfloat16,
+                bnb_4bit_use_double_quant=True,
+            )
+            cls._model = AutoModelForCausalLM.from_pretrained(
+                model_name, output_hidden_states=True, quantization_config=quant_config
+            )
+        return cls._model
+
+    @classmethod
+    def get_tokenizer(cls, model_name):
+        """Singleton pattern to reuse tokenizer across instances"""
+        if cls._tokenizer is None:
+            cls._tokenizer = AutoTokenizer.from_pretrained(model_name)
+            cls._tokenizer.pad_token = cls._tokenizer.eos_token
+        return cls._tokenizer
 
     def embed_func(self, inputs):
         """
@@ -45,12 +61,13 @@ class CustomEmbeddings(Embeddings):
             list: The embedding of the input text.
         """
 
-        tokens = self.tokenizer(
-            inputs, return_tensors="pt", padding=True, truncation=True
-        )
+        model = self.get_model(self.model_name)
+        tokenizer = self.get_tokenizer(self.model_name)
+
+        tokens = tokenizer(inputs, return_tensors="pt", padding=True, truncation=True)
 
         with torch.no_grad():
-            outputs = self.model(**tokens)
+            outputs = model(**tokens)
 
         if hasattr(outputs, "hidden_states"):
             hidden_states = outputs.hidden_states

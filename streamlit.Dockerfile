@@ -61,12 +61,12 @@ ENV PATH="/opt/venv/bin:$PATH"
 COPY requirements.txt .
 RUN pip install --no-cache-dir -U pip setuptools wheel && \
 	pip install --no-cache-dir torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121 && \
-	pip install --no-cache-dir \
-	nvidia-cuda-runtime-cu12 \
-	nvidia-cuda-nvrtc-cu12 \
-	nvidia-cuda-cupti-cu12 \
-	nvidia-cudnn-cu12 \
-	bitsandbytes>=0.41.3 && \
+	# pip install --no-cache-dir \
+	# nvidia-cuda-runtime-cu12 \
+	# nvidia-cuda-nvrtc-cu12 \
+	# nvidia-cuda-cupti-cu12 \
+	# nvidia-cudnn-cu12 \
+	# bitsandbytes>=0.41.3 && \
 	pip install --no-cache-dir -r requirements.txt && \
 	find /usr/local -type d -name "__pycache__" -exec rm -r {} + 2>/dev/null || true && \
 	find /usr/local -type d -name "tests" -exec rm -r {} + 2>/dev/null || true && \

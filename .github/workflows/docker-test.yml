@@ -53,7 +53,7 @@ jobs:
         env:
           OLLAMA_BASE_URL: http://localhost:11434
         run: |
-          docker run --gpus all -d --name test-container -p ${{ matrix.health-check-port }}:${{ matrix.health-check-port }} ${{ matrix.image-name }}:test
+          docker run --gpus all -d --name test-container -p ${{ matrix.health-check-port }}:${{ matrix.health-check-port }} -v ${{ github.workspace }}/src/models:/models -v ${{ github.workspace }}/src:/src:ro ${{ matrix.image-name }}:test
           # Wait for container to start
           sleep 30
           # Check container is running
@@ -61,7 +61,7 @@ jobs:
           # Check logs for any errors
           docker logs test-container
           # Test health check endpoint
-          curl --fail http://localhost:${{ matrix.health-check-port }} || curl --fail http://localhost:${{ matrix.health-check-port }}/_stcore/health
+          curl --fail http://localhost:${{ matrix.health-check-port }} || curl --fail http://localhost:${{ matrix.health-check-port }}/_stcore/health || curl --fail http://localhost:${{ matrix.health-check-port }}/api || exit 1
 
       - name: Cleanup
         if: always()

@@ -58,14 +58,14 @@ CHAT_QUESTION = f'Based on the Job Description and the provided Resume, answer t
 ANALYSIS_PROMPT = ChatPromptTemplate.from_template(
     template="""Answer the question based ONLY on the following context:
     Resume: {resume_context}
-    Job Description: {job_ad_context}
+    Job Description: {job_context}
     Question: {question}"""
 )
 
 CHAT_PROMPT = ChatPromptTemplate.from_template(
     template="""Answer the question based ONLY on the following context:
     Resume: {resume_context}
-    Job Description: {job_ad_context}
+    Job Description: {job_context}
     User Input: {user_input}
     Question: {question}"""
 )

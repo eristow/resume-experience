@@ -11,13 +11,17 @@ from tools import (
     extract_text_from_file,
     analyze_inputs,
     get_chat_response,
+    CONTEXT_WINDOW,
 )
 import logging
 from datetime import datetime
 from langchain_community.chat_models import ChatOllama
 from dotenv import load_dotenv
+import gc
+import torch
 
 TEMP_DIR = "/tmp"
+
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -27,17 +31,17 @@ ollama = ChatOllama(
     model="mistral:v0.3",
     temperature=0.3,
     base_url=OLLAMA_BASE_URL,
-    num_ctx=4096,
+    num_ctx=CONTEXT_WINDOW,
 )
 
 if "result" not in st.session_state:
     st.session_state.result = ""
-if "job_ad_retriever" not in st.session_state:
-    st.session_state.job_ad_retriever = None
+if "job_retriever" not in st.session_state:
+    st.session_state.job_retriever = None
 if "resume_retriever" not in st.session_state:
     st.session_state.resume_retriever = None
-if "job_ad_text" not in st.session_state:
-    st.session_state.job_ad_text = ""
+if "job_text" not in st.session_state:
+    st.session_state.job_text = ""
 if "resume_text" not in st.session_state:
     st.session_state.resume_text = ""
 if "chat_history" not in st.session_state:
@@ -66,14 +70,14 @@ def main():
 
     col1, col2 = st.columns(2)
 
-    job_ad_text = ""
+    job_text = ""
     resume_text = ""
     result = ""
 
     with st.form("input_file_form"):
         with col1:
-            job_ad_file = st.file_uploader(
-                "Upload Job Description", type=["pdf", "doc", "docx"], key="job_ad_file"
+            job_file = st.file_uploader(
+                "Upload Job Description", type=["pdf", "doc", "docx"], key="job_file"
             )
 
         with col2:
@@ -83,49 +87,61 @@ def main():
 
         if st.form_submit_button("Extract Text"):
             start_time = datetime.now()
-            if job_ad_file is None and resume_file is None:
+            if job_file is None and resume_file is None:
                 st.write("Please upload a job description and a resume first.")
                 return
 
-            job_ad_text = extract_text("job ad", job_ad_file, TEMP_DIR)
+            job_text = extract_text("job", job_file, TEMP_DIR)
             resume_text = extract_text("resume", resume_file, TEMP_DIR)
-            st.session_state["job_ad_text"] = job_ad_text
+            st.session_state["job_text"] = job_text
             st.session_state["resume_text"] = resume_text
 
             logger.info(f"Time spent extracting text: {datetime.now() - start_time}")
 
     col3, col4 = st.columns(2)
-    col3.text_area("Job Description", value=st.session_state["job_ad_text"], height=300)
+    col3.text_area("Job Description", value=st.session_state["job_text"], height=300)
     col4.text_area("Resume Text", value=st.session_state["resume_text"], height=300)
 
     if st.button("Analyze"):
         start_time = datetime.now()
         st.session_state["result"] = ""
-        st.session_state["job_ad_retriever"] = None
-        st.session_state["resume_retriever"] = None
+        if "job_retriever" in st.session_state:
+            del st.session_state["job_retriever"]
+        if "resume_retriever" in st.session_state:
+            del st.session_state["resume_retriever"]
 
-        job_ad_text = st.session_state["job_ad_text"]
+        # Force garbage collection
+        gc.collect()
+
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+
+        job_text = st.session_state["job_text"]
         resume_text = st.session_state["resume_text"]
 
         with st.spinner("Processing (this can take a few minutes)..."):
-            if (job_ad_text == "") or (resume_text == ""):
+            if not job_text or not resume_text:
                 st.write("Please upload a job description and a resume first.")
                 return
 
-            job_ad_text_log = (
-                job_ad_text[:100] if len(job_ad_text) > 100 else job_ad_text
-            )
+            job_text_log = job_text[:100] if len(job_text) > 100 else job_text
             resume_text_log = (
                 resume_text[:100] if len(resume_text) > 100 else resume_text
             )
-            logger.info(f"job_ad_text: %s", job_ad_text_log)
+            logger.info(f"job_text: %s", job_text_log)
             logger.info(f"resume_text: %s", resume_text_log)
-            result, job_ad_retriever, resume_retriever = analyze_inputs(
-                job_ad_text, resume_text, ollama
+
+            result, job_retriever, resume_retriever = analyze_inputs(
+                job_text, resume_text, ollama
             )
+
+            if isinstance(result, str) and "Failed" in result:
+                st.error(result)
+                return
+
             st.session_state["result"] = result.content
             logger.info(f"result_split: {result.content.split("|")}")
-            st.session_state["job_ad_retriever"] = job_ad_retriever
+            st.session_state["job_retriever"] = job_retriever
             st.session_state["resume_retriever"] = resume_retriever
 
             logger.info(f"Time spent analyzing: {datetime.now() - start_time}")
@@ -135,9 +151,8 @@ def main():
     if st.session_state["result"] != "":
         split_result = st.session_state["result"].split("|")
         split_result = [x.strip() for x in split_result]
-        st.write(split_result[0])
-        st.write(split_result[1])
-        st.write(split_result[2])
+        for result in split_result:
+            st.write(result)
 
     # Chatbot feature
     st.subheader("Chatbot Feature")
@@ -145,19 +160,19 @@ def main():
 
     if st.button("Submit Query"):
         start_time = datetime.now()
-        job_ad_text = st.session_state["job_ad_text"]
+        job_text = st.session_state["job_text"]
         resume_text = st.session_state["resume_text"]
 
-        if (job_ad_text == "") or (resume_text == ""):
+        if (job_text == "") or (resume_text == ""):
             st.write("Please upload and analyze a job description and a resume first.")
             return
 
         st.session_state["chat_history"].append({"role": "User", "content": user_input})
 
-        job_ad_retriever = st.session_state["job_ad_retriever"]
+        job_retriever = st.session_state["job_retriever"]
         resume_retriever = st.session_state["resume_retriever"]
         response = get_chat_response(
-            user_input, job_ad_retriever, resume_retriever, ollama
+            user_input, job_retriever, resume_retriever, ollama
         ).content
         st.session_state["chat_history"].append(
             {"role": "Assistant", "content": response}

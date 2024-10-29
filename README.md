@@ -35,7 +35,7 @@ Compare a job description to a resume and extract the number of years of relevan
 
 - Start an individual container:
   ```bash
-  docker run --gpus all -p 8501:8501 -v src/models:/models resume_experience_streamlit
+  docker run --gpus all -p 8501:8501 -v ${PWD}/src/models:/models -v ${PWD}/src:/src:ro resume_experience_streamlit
   docker run --gpus all -p 11434:11434 resume_experience_ollama
   ```
 

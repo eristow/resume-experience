@@ -115,4 +115,6 @@ else
 fi
 
 # Start Streamlit
+export PATH="/opt/venv/bin:$PATH"
+source /opt/venv/bin/activate
 exec python -m streamlit run main.py --server.port=8501 --server.address=0.0.0.0

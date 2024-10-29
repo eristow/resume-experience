@@ -1,5 +1,5 @@
 # Use the base image
-FROM ollama/ollama
+FROM ollama/ollama:0.3.14
 
 LABEL maintainer="eristow"
 LABEL version="1.0"
