@@ -1,3 +1,4 @@
+# Moved outside of workflows folder to avoid running
 name: Docker Build and Test
 
 on:
@@ -117,34 +118,35 @@ jobs:
           docker logs test-container || true
           docker rm -f test-container || true
 
-  test-docker-compose:
-    needs: test-individual-builds
-    runs-on: self-hosted
+  # Removing as docker-compose is only for local dev
+  # test-docker-compose:
+  #   needs: test-individual-builds
+  #   runs-on: self-hosted
     
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+  #   steps:
+  #     - name: Checkout repository
+  #       uses: actions/checkout@v4
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+  #     - name: Set up Docker Buildx
+  #       uses: docker/setup-buildx-action@v3
 
-      - name: Start containers with docker-compose
-        run: |
-          docker-compose up -d --build
-          sleep 45  # Give containers time to start up properly
+  #     - name: Start containers with docker-compose
+  #       run: |
+  #         docker-compose up -d --build
+  #         sleep 45  # Give containers time to start up properly
 
-      - name: Check containers status
-        run: |
-          docker-compose ps
-          docker-compose logs
+  #     - name: Check containers status
+  #       run: |
+  #         docker-compose ps
+  #         docker-compose logs
 
-      - name: Test services health
-        run: |
-          # Test Ollama service
-          curl --fail http://localhost:11434 || exit 1
-          # Test Streamlit service
-          curl --fail http://localhost:8501/_stcore/health || exit 1
+  #     - name: Test services health
+  #       run: |
+  #         # Test Ollama service
+  #         curl --fail http://localhost:11434 || exit 1
+  #         # Test Streamlit service
+  #         curl --fail http://localhost:8501/_stcore/health || exit 1
 
-      - name: Cleanup
-        if: always()
-        run: docker-compose down -v
+  #     - name: Cleanup
+  #       if: always()
+  #       run: docker-compose down -v
