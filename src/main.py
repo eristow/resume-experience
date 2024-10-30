@@ -17,8 +17,6 @@ import logging
 from datetime import datetime
 from langchain_community.chat_models import ChatOllama
 from dotenv import load_dotenv
-import gc
-import torch
 
 TEMP_DIR = "/tmp"
 
@@ -105,16 +103,23 @@ def main():
     if st.button("Analyze"):
         start_time = datetime.now()
         st.session_state["result"] = ""
+
         if "job_retriever" in st.session_state:
             del st.session_state["job_retriever"]
         if "resume_retriever" in st.session_state:
             del st.session_state["resume_retriever"]
 
-        # Force garbage collection
-        gc.collect()
+        # Reset Ollama's state
+        ollama = ChatOllama(
+            model="mistral:v0.3",
+            temperature=0.3,
+            base_url=OLLAMA_BASE_URL,
+            num_ctx=CONTEXT_WINDOW,
+        )
 
-        if torch.cuda.is_available():
-            torch.cuda.empty_cache()
+        # Clear chat history
+        # TODO: is this desired behavior? Should we inform the user before hand?
+        st.session_state["chat_history"] = []
 
         job_text = st.session_state["job_text"]
         resume_text = st.session_state["resume_text"]
@@ -171,6 +176,15 @@ def main():
 
         job_retriever = st.session_state["job_retriever"]
         resume_retriever = st.session_state["resume_retriever"]
+
+        # Reset Ollama's state
+        ollama = ChatOllama(
+            model="mistral:v0.3",
+            temperature=0.3,
+            base_url=OLLAMA_BASE_URL,
+            num_ctx=CONTEXT_WINDOW,
+        )
+
         response = get_chat_response(
             user_input, job_retriever, resume_retriever, ollama
         ).content

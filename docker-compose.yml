@@ -58,6 +58,9 @@ services:
         reservations:
           devices:
             - capabilities: [gpu]
+          memory: 4G
+        limits:
+          memory: 8G
 
     healthcheck:
       test: ['CMD-SHELL', 'curl localhost:11434']

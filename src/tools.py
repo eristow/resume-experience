@@ -11,6 +11,9 @@ import pdf2image
 import pytesseract
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_chroma import Chroma
+from langchain_community.callbacks.manager import get_openai_callback
+from langchain.schema import AIMessage, HumanMessage
+from langchain_core.runnables import RunnableConfig
 from pytesseract import Output
 from custom_embeddings import CustomEmbeddings
 from transformers import AutoTokenizer
@@ -24,6 +27,8 @@ from prompts import (
 import logging
 import shutil
 import torch
+import gc
+from typing import Optional
 
 OCR_LANG = "eng"
 logger = logging.getLogger(__name__)
@@ -32,7 +37,59 @@ CHUNK_SIZE = 1024
 CHUNK_OVERLAP = 200
 
 
-def verify_input_size(job_text, resume_text):
+class ContextManager:
+    """
+    Manages context and state for the analysis and chat processes.
+    Note: This class is focused on cleanup rather than storage/reuse of resources.
+    """
+
+    def __init__(self):
+        self._current_job_vectorstore: Optional[Chroma] = None
+        self._current_resume_vectorstore: Optional[Chroma] = None
+
+    def register_vectorstores(self, job_store: Chroma, resume_store: Chroma):
+        """Register current vectorstores for cleanup"""
+        self._current_job_vectorstore = job_store
+        self._current_resume_vectorstore = resume_store
+
+    def clear_context(self):
+        """Clear all stored context and force garbage collection"""
+        try:
+            # Clean up job vectorstore
+            if self._current_job_vectorstore is not None:
+                collection = self._current_job_vectorstore._collection
+                if collection is not None:
+                    ids = collection.get().get("ids", [])
+                    if ids:
+                        collection.delete(ids=ids)
+                self._current_job_vectorstore = None
+
+            # Clean up resume vectorstore
+            if self._current_resume_vectorstore is not None:
+                collection = self._current_resume_vectorstore._collection
+                if ids:
+                    collection.delete(ids=ids)
+                self._current_resume_vectorstore = None
+
+            # Force garbage collection
+            gc.collect()
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+
+        except Exception as e:
+            logger.error(f"Error during context cleanup: {e}")
+            # Continue with cleanup even if there's an error
+
+        finally:
+            # Ensure these are set to None even if cleanup fails
+            self._current_job_vectorstore = None
+            self._current_resume_vectorstore = None
+
+
+context_manager = ContextManager()
+
+
+def verify_input_size(job_text: str, resume_text: str):
     """
     More accurate token counting using the actual tokenizer
     """
@@ -74,7 +131,7 @@ def verify_input_size(job_text, resume_text):
     return total_tokens
 
 
-def analyze_inputs(job_text, resume_text, ollama):
+def analyze_inputs(job_text: str, resume_text: str, ollama):
     """
     Analyzes the inputs by processing the job text and resume text using the Mistral model.
 
@@ -89,11 +146,12 @@ def analyze_inputs(job_text, resume_text, ollama):
         job_retriever: The job retriever object.
         resume_retriever: The resume retriever object.
     """
+    context_manager.clear_context()
+
     if job_text and resume_text:
         try:
             total_tokens = verify_input_size(job_text, resume_text)
             logger.info(f"Total tokens (with overhead): {total_tokens}")
-
         except ValueError as e:
             logger.error(f"Input size verification failed: {e}")
             return (
@@ -103,35 +161,30 @@ def analyze_inputs(job_text, resume_text, ollama):
             )
 
         try:
-            if hasattr(analyze_inputs, "_job_vectorstore"):
-                del analyze_inputs._job_vectorstore
-            if hasattr(analyze_inputs, "_resume_vectorstore"):
-                del analyze_inputs._resume_vectorstore
+            embeddings = CustomEmbeddings(model_name="./models/mistral")
 
-            # Reuse existing embeddings instance if possible
-            if not hasattr(analyze_inputs, "_embeddings"):
-                analyze_inputs._embeddings = CustomEmbeddings(
-                    model_name="./models/mistral"
-                )
-
-            analyze_inputs._job_vectorstore = process_text(
-                job_text, analyze_inputs._embeddings
+            job_vectorstore = process_text(
+                job_text,
+                embeddings,
             )
-            analyze_inputs._resume_vectorstore = process_text(
-                resume_text, analyze_inputs._embeddings
+            resume_vectorstore = process_text(
+                resume_text,
+                embeddings,
             )
 
-            logger.info(f"job_vectorstore: {analyze_inputs._job_vectorstore}")
-            logger.info(f"resume_vectorstore: {analyze_inputs._resume_vectorstore}")
+            logger.info(f"job_vectorstore: {job_vectorstore}")
+            logger.info(f"resume_vectorstore: {resume_vectorstore}")
 
-            if analyze_inputs._job_vectorstore and analyze_inputs._resume_vectorstore:
+            if job_vectorstore and resume_vectorstore:
                 logger.info("Both vectorstores exist")
-                job_retriever = analyze_inputs._job_vectorstore.as_retriever()
-                resume_retriever = analyze_inputs._resume_vectorstore.as_retriever()
+                context_manager.register_vectorstores(
+                    job_vectorstore, resume_vectorstore
+                )
+                job_retriever = job_vectorstore.as_retriever(search_kwargs={"k": 2})
+                resume_retriever = resume_vectorstore.as_retriever(
+                    search_kwargs={"k": 2}
+                )
                 logger.info("After creating retrievers")
-
-                if torch.cuda.is_available():
-                    torch.cuda.empty_cache()
 
                 chain = (
                     {
@@ -143,22 +196,32 @@ def analyze_inputs(job_text, resume_text, ollama):
                     | ollama
                     | passthrough  # Simple output parsing
                 )
+                config = RunnableConfig(
+                    callbacks=None,
+                    configurable={
+                        "stop": None,
+                        "temperature": 0.3,
+                    },
+                )
                 logger.info("After creating chain")
+
                 response = chain.invoke(
-                    "Analyze the resume based on the job description"
+                    "Analyze the resume based on the job description", config=config
                 )
                 logger.info("After invoking chain to generate response")
                 return response, job_retriever, resume_retriever
-
         except Exception as e:
             logger.error(f"Analysis failed: {e} | {traceback.format_exc()}")
             return "Failed: Unable to process the files.", None, None
+        finally:
+            if "response" not in locals():
+                context_manager.clear_context()
     else:
         logger.error("Missing job text or resume text")
         return "Failed: Missing job text or resume text.", None, None
 
 
-def extract_text(file_type, file, temp_dir):
+def extract_text(file_type: str, file, temp_dir: str):
     """
     Extracts text from a given file.
 
@@ -191,7 +254,7 @@ def extract_text(file_type, file, temp_dir):
     return text
 
 
-def extract_text_from_file(uploaded_file, file_path):
+def extract_text_from_file(uploaded_file, file_path: str):
     """
     Extracts text from a given file.
 
@@ -216,7 +279,7 @@ def extract_text_from_file(uploaded_file, file_path):
 
 
 # Doesn't work if using uploaded_file. Only with file_path
-def extract_text_from_image(file_path):
+def extract_text_from_image(file_path: str):
     """
     Extracts text from a PDF image using OCR (Optical Character Recognition).
 
@@ -239,7 +302,7 @@ def extract_text_from_image(file_path):
     return text
 
 
-def process_text(text, embeddings):
+def process_text(text: str, embeddings):
     """
     Process text by splitting it into chunks, and creating a vectorstore.
 
@@ -284,7 +347,8 @@ def process_text(text, embeddings):
     return None
 
 
-def get_chat_response(user_input, job_retriever, resume_retriever, ollama):
+# TODO: add context_manager to clear context. And similar additions to analyze_inputs()
+def get_chat_response(user_input: str, job_retriever, resume_retriever, ollama):
     """
     Retrieves a chat response based on the user input, resume retriever, and job ad retriever.
 
