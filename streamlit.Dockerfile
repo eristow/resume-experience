@@ -11,11 +11,16 @@ ENV PATH=${CUDA_HOME}/bin:${PATH}
 ENV LD_LIBRARY_PATH=${CUDA_HOME}/lib64:/usr/local/lib:${LD_LIBRARY_PATH}
 
 # Install build dependencies
-RUN apt-get update && apt-get install -y \
+# RUN apt-get update && apt-get install -y \
+# 	wget gcc g++ make \
+# 	zlib1g-dev libssl-dev \
+# 	&& rm -rf /var/lib/apt/lists/* \
+# 	&& apt-get clean
+RUN --mount=type=cache,target=/var/cache/apt \
+	apt-get update && apt-get install -y \
 	wget gcc g++ make \
 	zlib1g-dev libssl-dev \
-	&& rm -rf /var/lib/apt/lists/* \
-	&& apt-get clean
+	&& rm -rf /var/lib/apt/lists/*
 
 # Install newer SQLite3 from source
 RUN cd /tmp && \
@@ -37,40 +42,54 @@ ENV DEBIAN_FRONTEND=noninteractive
 WORKDIR /deps
 
 # Install Python and build dependencies
-RUN apt-get update && apt-get install -y \
+# RUN apt-get update && apt-get install -y \
+# 	software-properties-common \
+# 	&& add-apt-repository ppa:deadsnakes/ppa > /dev/null 2>&1 \
+# 	&& apt-get update \
+# 	&& apt-get install -y \
+# 	python3.12 \
+# 	python3.12-dev \
+# 	python3.12-distutils \
+# 	python3-venv \
+# 	python3-pip \
+# 	python3.12-full \
+# 	build-essential \
+# 	&& rm -rf /var/lib/apt/lists/* \
+# 	&& ln -s /usr/bin/python3.12 /usr/local/bin/python \
+# 	&& curl -sS https://bootstrap.pypa.io/get-pip.py | python3.12
+RUN apt-get update \
+	&& DEBIAN_FRONTEND=noninteractive flock /var/lib/dpkg/lock-frontend -c ' \
+	apt-get install -y --no-install-recommends \
 	software-properties-common \
-	&& add-apt-repository ppa:deadsnakes/ppa > /dev/null 2>&1 \
-	&& apt-get update \
-	&& apt-get install -y \
-	python3.12 \
-	python3.12-dev \
-	python3.12-distutils \
-	python3-venv \
-	python3-pip \
-	python3.12-full \
-	build-essential \
-	&& rm -rf /var/lib/apt/lists/* \
-	&& ln -s /usr/bin/python3.12 /usr/local/bin/python \
-	&& curl -sS https://bootstrap.pypa.io/get-pip.py | python3.12
+	' \
+	&& add-apt-repository ppa:deadsnakes/ppa \
+	&& DEBIAN_FRONTEND=noninteractive flock /var/lib/dpkg/lock-frontend -c ' \
+	apt-get update \
+	&& apt-get install -y --no-install-recommends \
+	python3.12-minimal python3.12-dev python3.12-distutils python3.12-venv \
+	python3-venv python3-pip build-essential \
+	' \
+	&& rm -rf /var/lib/apt/lists/*
 
 # Create and activate a Python 3.12 virtual environment
-RUN python -m venv /opt/venv
-ENV PATH="/opt/venv/bin:$PATH"
+ENV VIRTUAL_ENV=/opt/venv
+# RUN python3.12 -m venv /opt/venv
+# RUN python3.12 -m venv /opt/venv
+RUN python3.12 -v -m venv /opt/venv || (python3.12 -v -m venv --clear /opt/venv 2>&1 && false)
+ENV PATH="$VIRTUAL_ENV/bin:$PATH"
 
 # Install Python packages
 COPY requirements.txt .
-RUN pip install --no-cache-dir -U pip setuptools wheel && \
+# RUN pip install --no-cache-dir -U pip setuptools wheel && \
+# 	pip install --no-cache-dir torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121 && \
+# 	pip install --no-cache-dir -r requirements.txt
+# find /usr/local -type d -name "__pycache__" -exec rm -r {} + 2>/dev/null || true && \
+# find /usr/local -type d -name "tests" -exec rm -r {} + 2>/dev/null || true && \
+# find /usr/local -type d -name "test" -exec rm -r {} + 2>/dev/null || true
+RUN --mount=type=cache,target=/root/.cache/pip \
+	pip install --no-cache-dir -U pip setuptools wheel && \
 	pip install --no-cache-dir torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121 && \
-	# pip install --no-cache-dir \
-	# nvidia-cuda-runtime-cu12 \
-	# nvidia-cuda-nvrtc-cu12 \
-	# nvidia-cuda-cupti-cu12 \
-	# nvidia-cudnn-cu12 \
-	# bitsandbytes>=0.41.3 && \
-	pip install --no-cache-dir -r requirements.txt && \
-	find /usr/local -type d -name "__pycache__" -exec rm -r {} + 2>/dev/null || true && \
-	find /usr/local -type d -name "tests" -exec rm -r {} + 2>/dev/null || true && \
-	find /usr/local -type d -name "test" -exec rm -r {} + 2>/dev/null || true
+	pip install --no-cache-dir -r requirements.txt
 
 # Stage 3: Final image
 FROM nvidia/cuda:12.3.1-runtime-ubuntu22.04
@@ -85,31 +104,42 @@ ENV DEBIAN_FRONTEND=noninteractive
 ENV PYTHONUNBUFFERED=1
 
 # Copy built SQLite from builder
+# COPY --from=builder /usr/local/lib/libsqlite3* /usr/local/lib/
+# COPY --from=builder /usr/local/include/sqlite3*.h /usr/local/include/
+# COPY --from=builder /usr/local/lib/pkgconfig/sqlite3.pc /usr/local/lib/pkgconfig/
 COPY --from=builder /usr/local/lib/libsqlite3* /usr/local/lib/
 COPY --from=builder /usr/local/include/sqlite3*.h /usr/local/include/
-COPY --from=builder /usr/local/lib/pkgconfig/sqlite3.pc /usr/local/lib/pkgconfig/
+COPY --from=python-deps /opt/venv /opt/venv
 
 # Install Python and runtime dependencies
-RUN apt-get update && apt-get install -y \
+# RUN apt-get update && apt-get install -y \
+# 	software-properties-common \
+# 	&& add-apt-repository ppa:deadsnakes/ppa > /dev/null 2>&1 \
+# 	&& apt-get update \
+# 	&& apt-get install -y \
+# 	python3.12-minimal \
+# 	libpython3.12 \
+# 	python3.12-venv \
+# 	python3-pip \
+# 	libssl-dev \
+# 	poppler-utils \
+# 	tesseract-ocr \
+# 	curl \
+# 	--no-install-recommends \
+# 	&& rm -rf /var/lib/apt/lists/* \
+# 	&& ln -s /usr/bin/python3.12 /usr/local/bin/python \
+# 	&& curl -sS https://bootstrap.pypa.io/get-pip.py | python3.12
+RUN --mount=type=cache,target=/var/cache/apt \
+	apt-get update && apt-get install -y \
 	software-properties-common \
-	&& add-apt-repository ppa:deadsnakes/ppa > /dev/null 2>&1 \
+	&& add-apt-repository ppa:deadsnakes/ppa \
 	&& apt-get update \
 	&& apt-get install -y \
-	python3.12-minimal \
-	libpython3.12 \
-	python3.12-venv \
-	python3-pip \
-	libssl-dev \
-	poppler-utils \
-	tesseract-ocr \
-	curl \
-	--no-install-recommends \
-	&& rm -rf /var/lib/apt/lists/* \
-	&& ln -s /usr/bin/python3.12 /usr/local/bin/python \
-	&& curl -sS https://bootstrap.pypa.io/get-pip.py | python3.12
+	python3.12-minimal libpython3.12 curl \
+	&& rm -rf /var/lib/apt/lists/*
 
 # Copy virtual environment from builder
-COPY --from=python-deps /opt/venv /opt/venv
+# COPY --from=python-deps /opt/venv /opt/venv
 
 # Make sure we use the virtualenv
 ENV PATH="/opt/venv/bin:$PATH"

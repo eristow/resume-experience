@@ -15,13 +15,22 @@ VOLUME /root/.ollama
 EXPOSE 11434
 
 # Update apt and install curl
-RUN apt-get update && \
-	DEBIAN_FRONTEND=noninteractive \
-	apt-get install --no-install-recommends --assume-yes \
-	curl
+# RUN apt-get update && \
+# 	DEBIAN_FRONTEND=noninteractive \
+# 	apt-get install --no-install-recommends --assume-yes \
+# 	curl
 
 # Start server, wait for it, and pull model during build
-RUN ollama serve & \
+# RUN ollama serve & \
+# 	timeout 60s bash -c 'until curl -s http://localhost:11434/api/tags >/dev/null 2>&1; do sleep 1; done' && \
+# 	ollama pull mistral:v0.3 && \
+# 	pkill ollama
+
+RUN --mount=type=cache,target=/var/cache/apt \
+	apt-get update && \
+	DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends curl && \
+	rm -rf /var/lib/apt/lists/* && \
+	ollama serve & \
 	timeout 60s bash -c 'until curl -s http://localhost:11434/api/tags >/dev/null 2>&1; do sleep 1; done' && \
 	ollama pull mistral:v0.3 && \
 	pkill ollama
