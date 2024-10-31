@@ -1,9 +1,3 @@
-"""
-prompts.py
-
-This module provides the prompts and templates used in the LLM/chatbot for extracting the number of years of relevant experience from a resume.
-"""
-
 from datetime import datetime
 from langchain.prompts import ChatPromptTemplate
 
@@ -72,15 +66,6 @@ CHAT_PROMPT = ChatPromptTemplate.from_template(
 
 
 # Simple passthrough function
-def passthrough(input_data):
-    """
-    A function that returns the input data as is.
-
-    Parameters:
-    input_data (any): The input data to be returned.
-
-    Returns:
-    any: The input data.
-
-    """
+def passthrough(input_data: any) -> any:
+    """A function that returns the input data as is."""
     return input_data

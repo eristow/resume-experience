@@ -136,6 +136,7 @@ RUN --mount=type=cache,target=/var/cache/apt \
 	&& apt-get update \
 	&& apt-get install -y \
 	python3.12-minimal libpython3.12 curl \
+	poppler-utils tesseract-ocr \
 	&& rm -rf /var/lib/apt/lists/*
 
 # Copy virtual environment from builder
