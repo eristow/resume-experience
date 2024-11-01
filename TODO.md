@@ -1,11 +1,14 @@
 ## TODO:
+- [ ] Fix "Install python dependencies" step of GHA streamlit test workflow
+  - Ensure docker build and run still work
+- [ ] Add tests for new files
+
 - [ ] Test with concurrent analysis requests
 
 - Suggestions from Claude:
   - [ ] Enhance context_manager class
   - [ ] Optimize the custom_embeddings class
   - [ ] Improve error handling and logging
-  - [ ] Add tests for new files
 
 - [ ] Split up the tuned Mistral model from the Streamlit container
   - 3 total containers: Streamlit, Ollama, Mistral

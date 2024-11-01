@@ -86,10 +86,11 @@ COPY requirements.txt .
 # find /usr/local -type d -name "__pycache__" -exec rm -r {} + 2>/dev/null || true && \
 # find /usr/local -type d -name "tests" -exec rm -r {} + 2>/dev/null || true && \
 # find /usr/local -type d -name "test" -exec rm -r {} + 2>/dev/null || true
+RUN grep -v 'torch==2.5.0' requirements.txt > requirements-no-torch.txt
 RUN --mount=type=cache,target=/root/.cache/pip \
 	pip install --no-cache-dir -U pip setuptools wheel && \
 	pip install --no-cache-dir torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121 && \
-	pip install --no-cache-dir -r requirements.txt
+	pip install --no-cache-dir -r requirements-no-torch.txt
 
 # Stage 3: Final image
 FROM nvidia/cuda:12.3.1-runtime-ubuntu22.04
