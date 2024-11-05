@@ -6,7 +6,7 @@ import os
 
 @dataclass
 class AppConfig:
-    TEMP_DIR: Path = Path("/tmp")
+    TEMP_DIR: Path = Path("/tmp/resume-experience")
     LOG_LEVEL: str = "INFO"
     CONTEXT_WINDOW: int = 4096
     CHUNK_SIZE: int = 1024
@@ -19,7 +19,7 @@ class AppConfig:
     def from_env(cls) -> "AppConfig":
         """Load configuration from environment variables"""
         return cls(
-            TEMP_DIR=Path(os.getenv("TEMP_DIR", "/tmp")),
+            TEMP_DIR=Path(os.getenv("TEMP_DIR", "/tmp/resume-experience")),
             LOG_LEVEL=os.getenv("LOG_LEVEL", "INFO"),
             CONTEXT_WINDOW=int(os.getenv("CONTEXT_WINDOW", 4096)),
             CHUNK_SIZE=int(os.getenv("CHUNK_SIZE", 1024)),

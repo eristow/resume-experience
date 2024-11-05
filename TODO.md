@@ -1,14 +1,25 @@
 ## TODO:
-- [ ] Fix "Install python dependencies" step of GHA streamlit test workflow
-  - Ensure docker build and run still work
 - [ ] Add tests for new files
 
+- [ ] Fix "Install python dependencies" step of GHA streamlit test workflow
+  - Ensure docker build and run still work
+
 - [ ] Test with concurrent analysis requests
+  - I think Ollama is mixing the inputs. Debug this further
+
+- [ ] Figure out if `/tmp/resume-experience` is working
+  - Got an error of `No such file or directory: '/tmp/resume-experience'`
 
 - Suggestions from Claude:
   - [ ] Enhance context_manager class
   - [ ] Optimize the custom_embeddings class
   - [ ] Improve error handling and logging
+    - Add UUID for logging during concurrent runs
+      - https://docs.python.org/3/howto/logging-cookbook.html#adding-contextual-information-to-your-logging-output
+
+- [ ] Test restricting the input of the resume. Only work experience
+  - Potentially change UI to have manual input of work experience
+    - Title, Company, Start date, End date, bullet points/description
 
 - [ ] Split up the tuned Mistral model from the Streamlit container
   - 3 total containers: Streamlit, Ollama, Mistral

@@ -143,6 +143,9 @@ def analyze_inputs(
                 )
                 logger.info("After invoking chain to generate response")
                 return response, job_retriever, resume_retriever
+            else:
+                logger.error("Failed to create vectorstores")
+                return "Failed: Unable to process the files.", None, None
         except Exception as e:
             logger.error(f"Analysis failed: {e} | {traceback.format_exc()}")
             return "Failed: Unable to process the files.", None, None
@@ -159,6 +162,10 @@ def process_text(
     embeddings: CustomEmbeddings,
 ) -> Optional[Chroma]:
     """Process text by splitting it into chunks, and creating a vectorstore."""
+    if not text or not embeddings:
+        logger.error("Missing text or embeddings")
+        return None
+
     text_splitter = RecursiveCharacterTextSplitter(
         chunk_size=config.app_config.CHUNK_SIZE,
         chunk_overlap=config.app_config.CHUNK_OVERLAP,

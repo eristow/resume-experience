@@ -17,6 +17,7 @@ class AppState:
     job_text: str = ""
     resume_text: str = ""
     chat_history: List[Dict[str, str]] = None
+    initialized: bool = False
 
     def __post_init__(self):
         if self.chat_history is None:

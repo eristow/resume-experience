@@ -1,3 +1,4 @@
+import atexit
 import os
 import shutil
 import streamlit as st
@@ -17,9 +18,6 @@ from components.chatbot import render_chatbot, handle_chat
 logging.basicConfig(level=logging.getLevelName(config.app_config.LOG_LEVEL))
 logger = logging.getLogger(__name__)
 
-load_dotenv()
-initialize_state(st)
-
 
 def log_texts(job_text: str, resume_text: str) -> None:
     """Log the job and resume texts."""
@@ -30,6 +28,28 @@ def log_texts(job_text: str, resume_text: str) -> None:
     logger.info(f"resume_text: %s", resume_text_log)
 
 
+def initialize_app():
+    """Initialize the app on first run."""
+    if not hasattr(st.session_state, "initialized"):
+        load_dotenv()
+        initialize_state(st)
+        app_state = st.session_state.app_state
+
+        logger.info("Starting the Resume Experience Analyzer app...")
+        os.makedirs(config.app_config.TEMP_DIR, exist_ok=True)
+        st.session_state.initialized = True
+
+
+def cleanup():
+    """Clean up resources when the session ends."""
+    if os.path.exists(config.app_config.TEMP_DIR):
+        shutil.rmtree(config.app_config.TEMP_DIR)
+        logger.info("Closing the Resume Experience Analyzer app...")
+
+
+atexit.register(lambda: shutil.rmtree(config.app_config.TEMP_DIR, ignore_errors=True))
+
+
 # Streamlit UI components
 def main():
     """
@@ -38,6 +58,8 @@ def main():
     This function handles the user interface and logic for uploading job descriptions and resumes,
     analyzing the inputs, and displaying the results.
     """
+    initialize_app()
+
     app_state = st.session_state.app_state
     ollama = new_ollama_instance()
 
@@ -107,10 +129,4 @@ def main():
 
 
 if __name__ == "__main__":
-    # Create a temporary directory to save uploaded files
-    os.makedirs(config.app_config.TEMP_DIR, exist_ok=True)
-
     main()
-
-    # Clean up the temporary directory after the app closes
-    shutil.rmtree(config.app_config.TEMP_DIR)
