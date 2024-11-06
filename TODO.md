@@ -1,9 +1,4 @@
 ## TODO:
-- [ ] Add tests for new files
-
-- [ ] Fix "Install python dependencies" step of GHA streamlit test workflow
-  - Ensure docker build and run still work
-
 - [ ] Test with concurrent analysis requests
   - I think Ollama is mixing the inputs. Debug this further
 
@@ -29,6 +24,9 @@
 - [ ] For prod, probably just a VM with Docker and Docker Compose?
 
 ## DONE:
+- [x] Fix "Install python dependencies" step of GHA streamlit test workflow
+  - Ensure docker build and run still work
+- [x] Add tests for new files
 - [x] Separate UI components from business logic in main.py
 - [x] Add typing to everything
 - [x] Add configuration management for hardcoded values
