@@ -59,9 +59,8 @@ class TestExtractText:
 
     def test_extract_text_file_missing_file(self):
         file = Mock(spec=UploadedFile)
-        file.name = "nonexistent.pdf"
 
-        result = extract_text("job", file, "./tests/temp/")
+        result = extract_text("job", None, "./tests/temp/")
         assert result is None
 
     def test_extract_text_unsupported_extension(self):

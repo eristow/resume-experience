@@ -49,8 +49,8 @@ def extract_text(
     temp_dir: str,
 ) -> Optional[str]:
     """Extracts text from a given file."""
-    if not os.path.isfile(file.name):
-        logger.error(f"File {file.name} does not exist")
+    if not file:
+        logger.error(f"File is missing")
         return
 
     if not get_file_extension(file):
