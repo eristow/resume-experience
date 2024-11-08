@@ -11,11 +11,6 @@ ENV PATH=${CUDA_HOME}/bin:${PATH}
 ENV LD_LIBRARY_PATH=${CUDA_HOME}/lib64:/usr/local/lib:${LD_LIBRARY_PATH}
 
 # Install build dependencies
-# RUN apt-get update && apt-get install -y \
-# 	wget gcc g++ make \
-# 	zlib1g-dev libssl-dev \
-# 	&& rm -rf /var/lib/apt/lists/* \
-# 	&& apt-get clean
 RUN --mount=type=cache,target=/var/cache/apt \
 	apt-get update && apt-get install -y \
 	wget gcc g++ make \
@@ -42,21 +37,6 @@ ENV DEBIAN_FRONTEND=noninteractive
 WORKDIR /deps
 
 # Install Python and build dependencies
-# RUN apt-get update && apt-get install -y \
-# 	software-properties-common \
-# 	&& add-apt-repository ppa:deadsnakes/ppa > /dev/null 2>&1 \
-# 	&& apt-get update \
-# 	&& apt-get install -y \
-# 	python3.12 \
-# 	python3.12-dev \
-# 	python3.12-distutils \
-# 	python3-venv \
-# 	python3-pip \
-# 	python3.12-full \
-# 	build-essential \
-# 	&& rm -rf /var/lib/apt/lists/* \
-# 	&& ln -s /usr/bin/python3.12 /usr/local/bin/python \
-# 	&& curl -sS https://bootstrap.pypa.io/get-pip.py | python3.12
 RUN apt-get update \
 	&& DEBIAN_FRONTEND=noninteractive flock /var/lib/dpkg/lock-frontend -c ' \
 	apt-get install -y --no-install-recommends \
@@ -79,17 +59,12 @@ RUN python3.12 -v -m venv /opt/venv || (python3.12 -v -m venv --clear /opt/venv 
 ENV PATH="$VIRTUAL_ENV/bin:$PATH"
 
 # Install Python packages
-COPY requirements.txt .
-# RUN pip install --no-cache-dir -U pip setuptools wheel && \
-# 	pip install --no-cache-dir torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121 && \
-# 	pip install --no-cache-dir -r requirements.txt
-# find /usr/local -type d -name "__pycache__" -exec rm -r {} + 2>/dev/null || true && \
-# find /usr/local -type d -name "tests" -exec rm -r {} + 2>/dev/null || true && \
-# find /usr/local -type d -name "test" -exec rm -r {} + 2>/dev/null || true
+COPY requirements_docker.txt ./requirements.txt
+RUN grep -v 'torch==2.5.0' requirements.txt > requirements-no-torch.txt
 RUN --mount=type=cache,target=/root/.cache/pip \
 	pip install --no-cache-dir -U pip setuptools wheel && \
 	pip install --no-cache-dir torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121 && \
-	pip install --no-cache-dir -r requirements.txt
+	pip install --no-cache-dir -r requirements-no-torch.txt
 
 # Stage 3: Final image
 FROM nvidia/cuda:12.3.1-runtime-ubuntu22.04
@@ -102,33 +77,15 @@ ENV NVIDIA_VISIBLE_DEVICES=all
 ENV NVIDIA_DRIVER_CAPABILITIES=compute,utility
 ENV DEBIAN_FRONTEND=noninteractive
 ENV PYTHONUNBUFFERED=1
+ENV PYTORCH_CUDA_ALLOC_CONF=max_split_size_mb:512
+ENV CUDA_MODULE_LOADING=LAZY
 
 # Copy built SQLite from builder
-# COPY --from=builder /usr/local/lib/libsqlite3* /usr/local/lib/
-# COPY --from=builder /usr/local/include/sqlite3*.h /usr/local/include/
-# COPY --from=builder /usr/local/lib/pkgconfig/sqlite3.pc /usr/local/lib/pkgconfig/
 COPY --from=builder /usr/local/lib/libsqlite3* /usr/local/lib/
 COPY --from=builder /usr/local/include/sqlite3*.h /usr/local/include/
 COPY --from=python-deps /opt/venv /opt/venv
 
 # Install Python and runtime dependencies
-# RUN apt-get update && apt-get install -y \
-# 	software-properties-common \
-# 	&& add-apt-repository ppa:deadsnakes/ppa > /dev/null 2>&1 \
-# 	&& apt-get update \
-# 	&& apt-get install -y \
-# 	python3.12-minimal \
-# 	libpython3.12 \
-# 	python3.12-venv \
-# 	python3-pip \
-# 	libssl-dev \
-# 	poppler-utils \
-# 	tesseract-ocr \
-# 	curl \
-# 	--no-install-recommends \
-# 	&& rm -rf /var/lib/apt/lists/* \
-# 	&& ln -s /usr/bin/python3.12 /usr/local/bin/python \
-# 	&& curl -sS https://bootstrap.pypa.io/get-pip.py | python3.12
 RUN --mount=type=cache,target=/var/cache/apt \
 	apt-get update && apt-get install -y \
 	software-properties-common \
@@ -136,10 +93,8 @@ RUN --mount=type=cache,target=/var/cache/apt \
 	&& apt-get update \
 	&& apt-get install -y \
 	python3.12-minimal libpython3.12 curl \
+	poppler-utils tesseract-ocr \
 	&& rm -rf /var/lib/apt/lists/*
-
-# Copy virtual environment from builder
-# COPY --from=python-deps /opt/venv /opt/venv
 
 # Make sure we use the virtualenv
 ENV PATH="/opt/venv/bin:$PATH"
@@ -169,5 +124,8 @@ COPY ./streamlit-docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
 VOLUME /models
+
+# Verify CUDA is available
+# RUN python -c "import torch; assert torch.cuda.is_available(), 'CUDA not available'; print('CUDA is available')"
 
 ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
