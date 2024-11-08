@@ -59,6 +59,12 @@ class TestAnalyzeInputs:
             mock_tokenizer.from_pretrained.return_value = mock_instance
             yield mock_tokenizer
 
+    @pytest.fixture
+    def mock_request_id(self):
+        with patch("analyze.context_manager.create_request_context") as mock_request_id:
+            mock_request_id.return_value = "1234"
+            yield mock_request_id
+
     def test_analyze_inputs_valid(
         self,
         mock_verify_input_size,
@@ -129,6 +135,7 @@ class TestAnalyzeInputs:
         mock_vectorstore,
         mock_embeddings,
         mock_tokenizer,
+        mock_request_id,
     ):
         job_text = "Sample job description"
         resume_text = "Sample resume"
@@ -141,7 +148,10 @@ class TestAnalyzeInputs:
         assert mock_process_text.call_count == 2
 
         mock_process_text.assert_has_calls(
-            [call(job_text, mock_embeddings), call(resume_text, mock_embeddings)],
+            [
+                call(job_text, mock_embeddings, "1234_job"),
+                call(resume_text, mock_embeddings, "1234_resume"),
+            ],
             any_order=True,
         )
 
@@ -199,18 +209,18 @@ class TestProcessText:
 
     def test_process_text_valid(self, mock_fake_embeddings, mock_chroma):
         text = "Sample text"
-        vectorstore = process_text(text, mock_fake_embeddings)
+        vectorstore = process_text(text, mock_fake_embeddings, "1234")
         assert vectorstore is not None
 
     def test_process_text_with_invalid_text(self, mock_fake_embeddings):
         text = ""
-        vectorstore = process_text(text, mock_fake_embeddings)
+        vectorstore = process_text(text, mock_fake_embeddings, "1234")
         assert vectorstore is None
 
     def test_process_text_with_invalid_embeddings(self):
         text = "Sample text"
         embeddings = None
-        vectorstore = process_text(text, embeddings)
+        vectorstore = process_text(text, embeddings, "1234")
         assert vectorstore is None
 
 

@@ -1,67 +1,56 @@
-# 1. Test Setup
-# - Create mock Chroma class
-# - Create mock Collection class
-# - Mock torch.cuda functionality
-# - Setup logging capture
-
-# 2. Test Initialization
-# - Test vectorstores are None after init
-
-# 3. Test Register Vectorstores
-# - Create mock stores
-# - Register stores
-# - Verify stores are properly set
-
-# 4. Test Clear Context
-# a) Test normal operation:
-#     - Setup mock stores with collections
-#     - Verify delete is called
-#     - Verify stores are set to None
-#     - Verify gc.collect called
-
-# b) Test error handling:
-#     - Test with None collections
-#     - Test with missing ids
-#     - Test with collection.delete raising exception
-
-# c) Test CUDA cleanup:
-#     - Mock cuda available true/false
-#     - Verify cuda cleanup called when available
-
-# 5. Test Edge Cases
-# - Test clear_context with unregistered stores
-# - Test multiple clear_context calls
-# - Test register_vectorstores multiple times
-
 import pytest
 from context_manager import ContextManager
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 from langchain_chroma import Chroma
+import logging
+
+logger = logging.getLogger("root")
 
 
 class TestContextManager:
+    @pytest.fixture
+    def mock_request_id(self):
+        with patch("context_manager.uuid.uuid4") as mock_request_id:
+            mock_request_id.return_value = "1234"
+            yield mock_request_id
+
     def test_init(self):
         manager = ContextManager()
-        assert manager._current_job_vectorstore is None
-        assert manager._current_resume_vectorstore is None
 
-    def test_register_vectorstores(self):
+        assert manager._contexts == {}
+        assert manager._lock is not None
+
+    def test_create_request_context(self):
+        manager = ContextManager()
+        request_id = manager.create_request_context()
+
+        assert request_id is not None
+        assert request_id in manager._contexts
+        assert manager._contexts[request_id] == {
+            "job_vectorstore": None,
+            "resume_vectorstore": None,
+        }
+
+    def test_register_vectorstores(self, mock_request_id):
         manager = ContextManager()
         mock_job_store = Mock(spec=Chroma)
         mock_resume_store = Mock(spec=Chroma)
 
-        manager.register_vectorstores(mock_job_store, mock_resume_store)
+        request_id = manager.create_request_context()
+        manager.register_vectorstores(request_id, mock_job_store, mock_resume_store)
 
-        assert manager._current_job_vectorstore == mock_job_store
-        assert manager._current_resume_vectorstore == mock_resume_store
+        assert manager._contexts[request_id]["job_vectorstore"] == mock_job_store
+        assert manager._contexts[request_id]["resume_vectorstore"] == mock_resume_store
 
-    def test_clear_context_empty_stores(self):
+    def test_clear_context_empty_stores(self, mock_request_id):
         manager = ContextManager()
-        manager.clear_context()  # Should not raise
-        assert manager._current_job_vectorstore is None
-        assert manager._current_resume_vectorstore is None
 
-    def test_clear_context_with_stores(self):
+        request_id = manager.create_request_context()
+        manager.clear_context(request_id)  # Should not raise
+
+        assert manager._contexts == {}
+
+    def test_clear_context_with_stores(self, mock_request_id):
         manager = ContextManager()
         mock_collection = Mock()
         mock_collection.get.return_value = {"ids": ["1", "2"]}
@@ -72,10 +61,10 @@ class TestContextManager:
         mock_resume_store = Mock(spec=Chroma)
         mock_resume_store._collection = mock_collection
 
-        manager.register_vectorstores(mock_job_store, mock_resume_store)
+        request_id = manager.create_request_context()
+        manager.register_vectorstores(request_id, mock_job_store, mock_resume_store)
 
-        manager.clear_context()
+        manager.clear_context(request_id)
 
         mock_collection.delete.assert_called_with(ids=["1", "2"])
-        assert manager._current_job_vectorstore is None
-        assert manager._current_resume_vectorstore is None
+        assert manager._contexts == {}

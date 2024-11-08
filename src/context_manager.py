@@ -15,8 +15,6 @@ class ContextManager:
     """
 
     def __init__(self):
-        # self._current_job_vectorstore: Optional[Chroma] = None
-        # self._current_resume_vectorstore: Optional[Chroma] = None
         self._contexts: Dict[str, Dict] = {}
         self._lock = Lock()
 
@@ -39,14 +37,14 @@ class ContextManager:
         resume_store: Chroma,
     ) -> None:
         """Register current vectorstores for a specific request context"""
-        # self._current_job_vectorstore = job_store
-        # self._current_resume_vectorstore = resume_store
         with self._lock:
             if request_id in self._contexts:
                 self._contexts[request_id]["job_vectorstore"] = job_store
                 self._contexts[request_id]["resume_vectorstore"] = resume_store
             else:
                 logger.error(f"No context found for request ID: {request_id}")
+
+        logger.info(f"contexts: {self._contexts}")
 
     def clear_context(self, request_id: str) -> None:
         """Clear all stored context and force garbage collection for a specific request"""

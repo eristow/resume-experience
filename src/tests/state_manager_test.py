@@ -77,7 +77,7 @@ class TestStateManager:
             model="mistral:v0.3",
             temperature=0.3,
             base_url="http://ollama:11434",
-            num_ctx=4096,
+            num_ctx=8192,
         )
         assert result == mock_instance
 

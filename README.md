@@ -111,3 +111,15 @@ Compare a job description to a resume and extract the number of years of relevan
   cd src
   python -m pytest
   ```
+
+- Generate a coverage report:
+
+  ```bash
+  # Install coverage
+  python -m pip install coverage
+
+  # Generate the coverage report
+  cd src
+  coverage run -m pytest
+  coverage report
+  ```
