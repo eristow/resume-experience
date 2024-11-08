@@ -87,6 +87,10 @@ def main():
         start_time = datetime.now()
         reset_state_analysis(st)
 
+        if app_state.current_request_id:
+            request_id = app_state.current_request_id
+        else:
+            request_id = None
         job_text = app_state.job_text
         resume_text = app_state.resume_text
 
@@ -97,10 +101,8 @@ def main():
 
             log_texts(job_text, resume_text)
 
-            result, job_retriever, resume_retriever = analyze_inputs(
-                job_text,
-                resume_text,
-                ollama,
+            result, job_retriever, resume_retriever, request_id = analyze_inputs(
+                job_text, resume_text, ollama, request_id
             )
 
             if isinstance(result, str) and "Failed" in result:

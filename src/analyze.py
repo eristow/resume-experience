@@ -77,8 +77,11 @@ def analyze_inputs(
     job_text: str,
     resume_text: str,
     ollama: ChatOllama,
+    request_id: Optional[str] = None,
 ) -> analyze_inputs_return_type:
     """Analyzes the inputs by processing the job text and resume text using the Mistral model."""
+    if request_id is not None:
+        context_manager.clear_context(request_id)
     request_id = context_manager.create_request_context()
 
     try:
@@ -90,6 +93,7 @@ def analyze_inputs(
                 logger.error(f"Input size verification failed: {e}")
                 return (
                     "Failed: Input too large. Please reduce the size of the job description or resume.",
+                    None,
                     None,
                     None,
                 )
@@ -116,10 +120,8 @@ def analyze_inputs(
                     context_manager.register_vectorstores(
                         request_id, job_vectorstore, resume_vectorstore
                     )
-                    job_retriever = job_vectorstore.as_retriever(search_kwargs={"k": 2})
-                    resume_retriever = resume_vectorstore.as_retriever(
-                        search_kwargs={"k": 2}
-                    )
+                    job_retriever = job_vectorstore.as_retriever()
+                    resume_retriever = resume_vectorstore.as_retriever()
                     logger.info("After creating retrievers")
 
                     chain = (
@@ -145,16 +147,16 @@ def analyze_inputs(
                         "Analyze the resume based on the job description", config=config
                     )
                     logger.info("After invoking chain to generate response")
-                    return response, job_retriever, resume_retriever
+                    return response, job_retriever, resume_retriever, request_id
                 else:
                     logger.error("Failed to create vectorstores")
-                    return "Failed: Unable to process the files.", None, None
+                    return "Failed: Unable to process the files.", None, None, None
             except Exception as e:
                 logger.error(f"Analysis failed: {e} | {traceback.format_exc()}")
-                return "Failed: Unable to process the files.", None, None
+                return "Failed: Unable to process the files.", None, None, None
         else:
             logger.error("Missing job text or resume text")
-            return "Failed: Missing job text or resume text.", None, None
+            return "Failed: Missing job text or resume text.", None, None, None
     finally:
         context_manager.clear_context(request_id)
 
@@ -185,7 +187,7 @@ def process_text(
 
     if chunks and embeddings:
         embeddings_list = embeddings.embed_documents(chunks)
-        logger.info("embeddings_list created")
+        logger.info(f"Number of embeddings created: {len(embeddings_list)}")
 
         if embeddings_list:
             logger.info(f"embeddings: {embeddings}")
@@ -194,7 +196,9 @@ def process_text(
                 vectorstore = Chroma.from_texts(
                     texts=chunks, embedding=embeddings, collection_name=collection_name
                 )
-                logger.info(f"vectorstore: {vectorstore}")
+                logger.info(
+                    f"Vectorstore created with {vectorstore._collection.count()} documents"
+                )
                 return vectorstore
             except Exception as e:
                 logger.error("An error occurred while creating the vectorstore:")
@@ -213,6 +217,7 @@ def get_chat_response(
     logger.info(f"user_input: {user_input}")
     logger.info(f"resume_retriever: {resume_retriever}")
     logger.info(f"job_retriever: {job_retriever}")
+
     if not user_input or not job_retriever or not resume_retriever:
         return None
 

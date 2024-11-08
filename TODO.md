@@ -1,4 +1,14 @@
 ## TODO:
+- [ ] Fix chatbot not having vectorstores from analysis
+  - Due to clearing context_manager after analysis. Fix this
+
+- [ ] First run can't be concurrent runs
+  - Have to run only one at a time, then can run concurrently
+  - I think because it has to load checkpoint shards, so maybe try downloading model in one file instead of shards
+
+- [ ] Prevent user from interacting while processing
+  - For extract text, analysis, and chatbot
+
 - [ ] Split up the tuned Mistral model from the Streamlit container
   - 3 total containers: Streamlit, Ollama, Mistral
   - Streamlit will have to make API calls to Mistral

@@ -55,6 +55,8 @@ class ContextManager:
             try:
                 context = self._contexts[request_id]
 
+                logger.info(f"Clearing context for request {request_id}")
+
                 # Clean up job vectorstore
                 if context["job_vectorstore"] is not None:
                     collection = context["job_vectorstore"]._collection

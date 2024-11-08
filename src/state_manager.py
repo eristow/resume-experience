@@ -18,6 +18,7 @@ class AppState:
     resume_text: str = ""
     chat_history: List[Dict[str, str]] = None
     initialized: bool = False
+    current_request_id: Optional[str] = None
 
     def __post_init__(self):
         if self.chat_history is None:
@@ -42,7 +43,10 @@ def initialize_state(st) -> None:
 
 
 def reset_state_analysis(st) -> None:
-    """Reset all session state variables related to analysis"""
+    """
+    Reset all session state variables related to analysis
+    current_request_id is used in analyze_inputs to clear stored vectorstores in context_manager
+    """
     # TODO: is resetting chat history on new analysis desired behavior? Should we inform the user before hand?
     st.session_state.app_state.chat_history = []
     st.session_state.app_state.result = ""
