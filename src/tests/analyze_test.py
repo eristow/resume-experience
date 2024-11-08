@@ -1,16 +1,11 @@
-from tools import (
-    extract_text,
-    extract_text_from_file,
+from analyze import (
     analyze_inputs,
-    extract_text_from_image,
     process_text,
     get_chat_response,
 )
-import custom_embeddings
-import os
+
 import pytest
 from unittest.mock import Mock, patch, call
-from langchain_community.chat_models import ChatOllama
 from langchain_community.embeddings import FakeEmbeddings
 
 
@@ -25,12 +20,11 @@ def mock_chat_ollama(input_data):
 class TestAnalyzeInputs:
     """Testing analyze_inputs function."""
 
-    # @pytest.fixture(scope="session", autouse=True)
-    # def mock_chat_ollama(self):
-    # with patch("langchain_community.chat_models.ChatOllama") as mock_chat:
-    #     mock_instance = Mock()
-    #     mock_chat.return_value = mock_instance
-    #     yield mock_chat
+    @pytest.fixture
+    def mock_verify_input_size(self):
+        with patch("analyze.verify_input_size") as mock_verify:
+            mock_verify.return_value = 100
+            yield mock_verify
 
     @pytest.fixture
     def mock_embeddings(self):
@@ -46,19 +40,28 @@ class TestAnalyzeInputs:
 
     @pytest.fixture
     def mock_process_text(self, mock_vectorstore):
-        with patch("tools.process_text") as mock_process:
+        with patch("analyze.process_text") as mock_process:
             mock_process.return_value = mock_vectorstore
             yield mock_process
 
     @pytest.fixture
     def mock_custom_embeddings(self, mock_embeddings):
-        with patch("tools.CustomEmbeddings") as mock_custom:
+        with patch("analyze.CustomEmbeddings") as mock_custom:
             mock_custom.return_value = mock_embeddings
             yield mock_custom
 
-    def test_analyze_inputs_happy(
+    @pytest.fixture
+    def mock_tokenizer(self):
+        with patch("analyze.AutoTokenizer") as mock_tokenizer:
+            mock_instance = Mock()
+            mock_instance.model_max_length = 32000
+            mock_instance.encode.return_value = [1, 2, 3]
+            mock_tokenizer.from_pretrained.return_value = mock_instance
+            yield mock_tokenizer
+
+    def test_analyze_inputs_valid(
         self,
-        # mock_chat_ollama,
+        mock_verify_input_size,
         mock_process_text,
         mock_custom_embeddings,
         mock_vectorstore,
@@ -80,13 +83,19 @@ class TestAnalyzeInputs:
 
     def test_analyze_inputs_with_invalid_vectorstore(
         self,
-        # mock_chat_ollama,
+        mock_verify_input_size,
         mock_custom_embeddings,
         mock_embeddings,
     ):
-        with patch("tools.process_text", return_value=None):
-            response = analyze_inputs("job", "resume", mock_chat_ollama)
-            assert response == "Failed to process the files."
+        with patch("analyze.process_text", return_value=None):
+            response, job_retriever, resume_retriever = analyze_inputs(
+                "job",
+                "resume",
+                mock_chat_ollama,
+            )
+            assert "Failed:" in response
+            assert job_retriever is None
+            assert resume_retriever is None
 
     @pytest.mark.parametrize(
         "job_text,resume_text",
@@ -100,22 +109,26 @@ class TestAnalyzeInputs:
         self,
         job_text,
         resume_text,
-        # mock_chat_ollama,
+        mock_verify_input_size,
         mock_custom_embeddings,
     ):
         job_text = None
         resume_text = None
 
-        response = analyze_inputs(job_text, resume_text, mock_chat_ollama)
-        assert response == "Failed to process the files."
+        response, job_retriever, resume_retriever = analyze_inputs(
+            job_text, resume_text, mock_chat_ollama
+        )
+        assert "Failed:" in response
+        assert job_retriever is None
+        assert resume_retriever is None
 
     def test_analyze_inputs_full_chain(
         self,
-        # mock_chat_ollama,
         mock_process_text,
         mock_custom_embeddings,
         mock_vectorstore,
         mock_embeddings,
+        mock_tokenizer,
     ):
         job_text = "Sample job description"
         resume_text = "Sample resume"
@@ -134,62 +147,64 @@ class TestAnalyzeInputs:
 
         assert mock_vectorstore.as_retriever.call_count == 2
 
+    def test_analyze_inputs_with_large_input(
+        self,
+        mock_custom_embeddings,
+        mock_embeddings,
+    ):
+        with patch(
+            "analyze.verify_input_size", side_effect=ValueError("Input too large")
+        ):
+            response, job_retriever, resume_retriever = analyze_inputs(
+                "large job text",
+                "large resume text",
+                mock_chat_ollama,
+            )
+            assert "Failed: Input too large" in response
+            assert job_retriever is None
+            assert resume_retriever is None
 
-class TestExtractText:
-    """Testing extract_text function."""
-
-    @pytest.fixture(scope="session", autouse=True)
-    def cleanup_temp_dir(self):
-        yield
-        if os.path.exists("tests/temp/test.pdf"):
-            os.remove("tests/temp/test.pdf")
-
-    def test_extract_job_ad(self):
-        file = open("tests/test.pdf", "r")
-
-        assert extract_text("job ad", file, "./tests/temp/") == "Test image text."
-
-
-class TestExtractTextFromFile:
-    """Testing extract_text_from_file function."""
-
-    def test_extract_text_from_pdf(self):
-        file = open("tests/test.pdf", "r")
-
-        assert extract_text_from_file(file, "tests/test.pdf") == "Test image text."
-
-    def test_extract_text_from_doc(self):
-        file = open("tests/test.docx", "r")
-
-        assert extract_text_from_file(file, "tests/test.docx") == "Test doc text.\n"
-
-    def test_blank_file(self):
-        file = open("tests/blank.pdf", "r")
-
-        assert extract_text_from_file(file, "tests/blank.pdf") == None
-
-
-class TestExtractTextFromImage:
-    """Testing extract_text_from_image function."""
-
-    def test_extract_text_from_image(self):
-        assert extract_text_from_image("tests/test.pdf") == "Test image text."
-
-    def test_blank_image(self):
-        assert extract_text_from_image("tests/blank.pdf") == ""
+    def test_analyze_inputs_with_processing_error(
+        self,
+        mock_verify_input_size,
+        mock_custom_embeddings,
+        mock_embeddings,
+    ):
+        with patch("analyze.process_text", side_effect=Exception("Processing error")):
+            response, job_retriever, resume_retriever = analyze_inputs(
+                "job",
+                "resume",
+                mock_chat_ollama,
+            )
+            assert "Failed: Unable to process the files." in response
+            assert job_retriever is None
+            assert resume_retriever is None
 
 
 class TestProcessText:
-    def test_process_text_happy(self):
+    @pytest.fixture
+    def mock_fake_embeddings(self):
+        mock_embeddings = Mock(spec=FakeEmbeddings)
+        mock_tokenizer = Mock()
+        mock_tokenizer.encode.return_value = [1, 2, 3]
+        mock_embeddings.get_tokenizer = Mock(return_value=mock_tokenizer)
+        mock_embeddings.model_name = Mock(return_value="fake_model")
+        return mock_embeddings
+
+    @pytest.fixture
+    def mock_chroma(self):
+        with patch("analyze.Chroma") as mock_chroma:
+            mock_chroma.from_texts_return_value = [1, 2, 3]
+            yield mock_chroma
+
+    def test_process_text_valid(self, mock_fake_embeddings, mock_chroma):
         text = "Sample text"
-        embeddings = FakeEmbeddings(size=300)
-        vectorstore = process_text(text, embeddings)
+        vectorstore = process_text(text, mock_fake_embeddings)
         assert vectorstore is not None
 
-    def test_process_text_with_invalid_text(self):
+    def test_process_text_with_invalid_text(self, mock_fake_embeddings):
         text = ""
-        embeddings = FakeEmbeddings(size=300)
-        vectorstore = process_text(text, embeddings)
+        vectorstore = process_text(text, mock_fake_embeddings)
         assert vectorstore is None
 
     def test_process_text_with_invalid_embeddings(self):
@@ -207,7 +222,7 @@ class TestGetChatResponse:
         mock_vs.as_retriever.return_value = mock_retriever
         return mock_vs
 
-    def test_get_chat_response_happy(self, mock_vectorstore):
+    def test_get_chat_response_valid(self, mock_vectorstore):
         response = get_chat_response(
             "Sample text",
             mock_vectorstore.as_retriever(),
@@ -216,6 +231,10 @@ class TestGetChatResponse:
         )
 
         assert response is not None
+        assert (
+            response.content
+            == "Overall the resume is a good match for the job description."
+        )
 
     def test_get_chat_response_with_invalid_text(self, mock_vectorstore):
         response = get_chat_response(

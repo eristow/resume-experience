@@ -1,0 +1,152 @@
+# Moved outside of workflows folder to avoid running
+# name: Docker Build and Test
+
+# on:
+#   push:
+#     branches: [ "main", "feature/**" ]
+#     paths:
+#       - '**.Dockerfile'
+#       - 'docker-compose.yml'
+#       - '.github/workflows/docker-test.yml'
+#       - 'src/**'
+#       - 'requirements.txt'
+#   pull_request:
+#     branches: [ "main" ]
+#     paths:
+#       - '**.Dockerfile'
+#       - 'docker-compose.yml'
+#       - '.github/workflows/docker-test.yml'
+#       - 'src/**'
+#       - 'requirements.txt'
+
+# jobs:
+#   test-individual-builds:
+#     runs-on: self-hosted
+#     strategy:
+#       matrix:
+#         docker-file: ['ollama.Dockerfile', 'streamlit.Dockerfile']
+#         include:
+#           - docker-file: 'ollama.Dockerfile'
+#             image-name: 'resume_experience_ollama'
+#             health-check-port: 11434
+#           - docker-file: 'streamlit.Dockerfile'
+#             image-name: 'resume_experience_streamlit'
+#             health-check-port: 8501
+
+#     steps:
+#       - name: Checkout repository
+#         uses: actions/checkout@v4
+
+#       - name: Set up Docker Buildx
+#         uses: docker/setup-buildx-action@v3
+#         with:
+#           driver-opts: |
+#             image=moby/buildkit:master
+#             network=host
+
+#       - name: Build Docker image
+#         uses: docker/build-push-action@v5
+#         with:
+#           context: .
+#           file: ${{ matrix.docker-file }}
+#           tags: ${{ matrix.image-name }}:test
+#           load: true
+#           cache-from: |
+#             type=gha,scope=${{ github.workflow }}-${{ matrix.image-name }}
+#           cache-to: |
+#             type=gha,mode=max,scope=${{ github.workflow }}-${{ matrix.image-name }}
+#           build-args: |
+#             BUILDKIT_INLINE_CACHE=1
+#             CUDA_VERSION=12.3.1
+#           platforms: linux/amd64
+      
+#       - name: Create fake models directory and files
+#         run: |
+#           mkdir -p src/models/mistral
+#           touch src/models/.gitkeep
+#           touch src/models/mistral/config.json
+#           touch src/models/mistral/generation_config.json
+#           touch src/models/mistral/model.safetensors
+#           touch src/models/mistral/special_tokens_map.json
+#           touch src/models/mistral/tokenizer_config.json
+#           touch src/models/mistral/tokenizer.json
+
+
+#       - name: Test container startup
+#         env:
+#           OLLAMA_BASE_URL: http://localhost:11434
+#         run: |
+#           # Run container in detached mode
+#           docker run -d --gpus all --name test-container \
+#             -p ${{ matrix.health-check-port }}:${{ matrix.health-check-port }} \
+#             -v ${{ github.workspace }}/src/models:/models \
+#             -v ${{ github.workspace }}/src:/src:ro \
+#             ${{ matrix.image-name }}:test
+          
+#           # Follow logs in background while testing
+#           docker logs -f test-container &
+#           LOGS_PID=$!
+
+#           # Wait for container to start
+#           echo "Waiting for container to start..."
+#           sleep 30
+
+#           # Check container is running and get its status
+#           echo "Container status:"
+#           docker ps -a | grep test-container
+
+#           # test health check endpoint
+#           echo "testing health check endpoint..."
+#           curl --fail http://localhost:${{ matrix.health-check-port }} || \
+#           curl --fail http://localhost:${{ matrix.health-check-port }}/_stcore/health || \
+#           curl --fail http://localhost:${{ matrix.health-check-port }}/api || \
+#           (
+#             # If health check fails, show full logs and exit
+#             echo "Health check failed. Full container logs:"
+#             docker logs test-container
+#             kill $LOGS_PID
+#             exit 1
+#           )
+          
+#           # If we get here, tests passed - kill the log following process
+#           kill $LOGS_PID
+
+#       - name: Cleanup
+#         if: always()
+#         run: |
+#           echo "Final container logs:"
+#           docker logs test-container || true
+#           docker rm -f test-container || true
+
+  # Removing as docker-compose is only for local dev
+  # test-docker-compose:
+  #   needs: test-individual-builds
+  #   runs-on: self-hosted
+    
+  #   steps:
+  #     - name: Checkout repository
+  #       uses: actions/checkout@v4
+
+  #     - name: Set up Docker Buildx
+  #       uses: docker/setup-buildx-action@v3
+
+  #     - name: Start containers with docker-compose
+  #       run: |
+  #         docker-compose up -d --build
+  #         sleep 45  # Give containers time to start up properly
+
+  #     - name: Check containers status
+  #       run: |
+  #         docker-compose ps
+  #         docker-compose logs
+
+  #     - name: Test services health
+  #       run: |
+  #         # Test Ollama service
+  #         curl --fail http://localhost:11434 || exit 1
+  #         # Test Streamlit service
+  #         curl --fail http://localhost:8501/_stcore/health || exit 1
+
+  #     - name: Cleanup
+  #       if: always()
+  #       run: docker-compose down -v
