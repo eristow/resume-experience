@@ -8,7 +8,7 @@ import os
 class AppConfig:
     TEMP_DIR: Path = Path("/tmp/resume-experience")
     LOG_LEVEL: str = "INFO"
-    CONTEXT_WINDOW: int = 4096
+    CONTEXT_WINDOW: int = 8192
     CHUNK_SIZE: int = 1024
     CHUNK_OVERLAP: int = 200
     OCR_LANG: str = "eng"
@@ -21,7 +21,7 @@ class AppConfig:
         return cls(
             TEMP_DIR=Path(os.getenv("TEMP_DIR", "/tmp/resume-experience")),
             LOG_LEVEL=os.getenv("LOG_LEVEL", "INFO"),
-            CONTEXT_WINDOW=int(os.getenv("CONTEXT_WINDOW", 4096)),
+            CONTEXT_WINDOW=int(os.getenv("CONTEXT_WINDOW", 8192)),
             CHUNK_SIZE=int(os.getenv("CHUNK_SIZE", 1024)),
             CHUNK_OVERLAP=int(os.getenv("CHUNK_OVERLAP", 200)),
             OCR_LANG=os.getenv("OCR_LANG", "eng"),

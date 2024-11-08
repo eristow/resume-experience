@@ -3,10 +3,10 @@ from dataclasses import dataclass
 from typing import Optional, List, Dict
 from langchain_community.vectorstores import Chroma
 from langchain_community.chat_models import ChatOllama
-import config
 import logging
+from config import app_config
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("root")
 
 
 @dataclass
@@ -55,6 +55,6 @@ def new_ollama_instance() -> ChatOllama:
     return ChatOllama(
         model="mistral:v0.3",
         temperature=0.3,
-        base_url=config.app_config.OLLAMA_BASE_URL,
-        num_ctx=config.app_config.CONTEXT_WINDOW,
+        base_url=app_config.OLLAMA_BASE_URL,
+        num_ctx=app_config.CONTEXT_WINDOW,
     )

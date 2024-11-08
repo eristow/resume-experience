@@ -7,10 +7,11 @@ from langchain_core.runnables import RunnableConfig
 from langchain_core.vectorstores import VectorStoreRetriever
 from langchain_community.chat_models import ChatOllama
 from transformers import AutoTokenizer
+import threading
 import logging
 from typing import Optional, Tuple, Union
 from custom_embeddings import CustomEmbeddings
-import config
+from config import app_config
 from prompts import (
     ANALYSIS_QUESTION,
     ANALYSIS_PROMPT,
@@ -20,7 +21,8 @@ from prompts import (
 )
 from context_manager import ContextManager
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("root")
+
 context_manager = ContextManager()
 
 analyze_inputs_return_type = Union[Tuple[str, Chroma, Chroma], Tuple[str, None, None]]
@@ -45,10 +47,10 @@ def verify_input_size(
     total_text_tokens = job_tokens + resume_tokens
     num_chunks = max(
         1,
-        (total_text_tokens + config.app_config.CHUNK_OVERLAP)
-        // (config.app_config.CHUNK_SIZE - config.app_config.CHUNK_OVERLAP),
+        (total_text_tokens + app_config.CHUNK_OVERLAP)
+        // (app_config.CHUNK_SIZE - app_config.CHUNK_OVERLAP),
     )
-    total_chunk_tokens = num_chunks * config.app_config.CHUNK_SIZE
+    total_chunk_tokens = num_chunks * app_config.CHUNK_SIZE
 
     total_tokens = total_chunk_tokens + prompt_tokens
 
@@ -59,13 +61,11 @@ def verify_input_size(
     logger.info(f"Total chunk tokens: {total_chunk_tokens}")
     logger.info(f"Total estimated tokens: {total_tokens}")
 
-    max_safe_tokens = (
-        config.app_config.CONTEXT_WINDOW - 200
-    )  # Leave some buffer for safety
+    max_safe_tokens = app_config.CONTEXT_WINDOW - 200  # Leave some buffer for safety
     if total_tokens > max_safe_tokens:
         raise ValueError(
             f"Input would require approximately {total_tokens} tokens, "
-            f"exceeding the {config.app_config.CONTEXT_WINDOW} token context window. "
+            f"exceeding the {app_config.CONTEXT_WINDOW} token context window. "
             f"Please reduce the input size by about "
             f"{((total_tokens - max_safe_tokens) / total_tokens * 100):.1f}%"
         )
@@ -79,87 +79,90 @@ def analyze_inputs(
     ollama: ChatOllama,
 ) -> analyze_inputs_return_type:
     """Analyzes the inputs by processing the job text and resume text using the Mistral model."""
-    context_manager.clear_context()
+    request_id = context_manager.create_request_context()
 
-    if job_text and resume_text:
-        try:
-            total_tokens = verify_input_size(job_text, resume_text)
-            logger.info(f"Total tokens (with overhead): {total_tokens}")
-        except ValueError as e:
-            logger.error(f"Input size verification failed: {e}")
-            return (
-                "Failed: Input too large. Please reduce the size of the job description or resume.",
-                None,
-                None,
-            )
-
-        try:
-            embeddings = CustomEmbeddings(model_name="./models/mistral")
-
-            job_vectorstore = process_text(
-                job_text,
-                embeddings,
-            )
-            resume_vectorstore = process_text(
-                resume_text,
-                embeddings,
-            )
-
-            logger.info(f"job_vectorstore: {job_vectorstore}")
-            logger.info(f"resume_vectorstore: {resume_vectorstore}")
-
-            if job_vectorstore and resume_vectorstore:
-                logger.info("Both vectorstores exist")
-                context_manager.register_vectorstores(
-                    job_vectorstore, resume_vectorstore
+    try:
+        if job_text and resume_text:
+            try:
+                total_tokens = verify_input_size(job_text, resume_text)
+                logger.info(f"Total tokens (with overhead): {total_tokens}")
+            except ValueError as e:
+                logger.error(f"Input size verification failed: {e}")
+                return (
+                    "Failed: Input too large. Please reduce the size of the job description or resume.",
+                    None,
+                    None,
                 )
-                job_retriever = job_vectorstore.as_retriever(search_kwargs={"k": 2})
-                resume_retriever = resume_vectorstore.as_retriever(
-                    search_kwargs={"k": 2}
-                )
-                logger.info("After creating retrievers")
 
-                chain = (
-                    {
-                        "resume_context": resume_retriever,
-                        "job_context": job_retriever,
-                        "question": lambda x: ANALYSIS_QUESTION,
-                    }
-                    | ANALYSIS_PROMPT
-                    | ollama
-                    | passthrough  # Simple output parsing
-                )
-                config = RunnableConfig(
-                    callbacks=None,
-                    configurable={
-                        "stop": None,
-                        "temperature": 0.3,
-                    },
-                )
-                logger.info("After creating chain")
+            try:
+                embeddings = CustomEmbeddings(model_name="./models/mistral")
 
-                response = chain.invoke(
-                    "Analyze the resume based on the job description", config=config
+                job_vectorstore = process_text(
+                    job_text,
+                    embeddings,
+                    f"{request_id}_job",
                 )
-                logger.info("After invoking chain to generate response")
-                return response, job_retriever, resume_retriever
-            else:
-                logger.error("Failed to create vectorstores")
+                resume_vectorstore = process_text(
+                    resume_text,
+                    embeddings,
+                    f"{request_id}_resume",
+                )
+
+                logger.info(f"job_vectorstore: {job_vectorstore}")
+                logger.info(f"resume_vectorstore: {resume_vectorstore}")
+
+                if job_vectorstore and resume_vectorstore:
+                    logger.info("Both vectorstores exist")
+                    context_manager.register_vectorstores(
+                        request_id, job_vectorstore, resume_vectorstore
+                    )
+                    job_retriever = job_vectorstore.as_retriever(search_kwargs={"k": 2})
+                    resume_retriever = resume_vectorstore.as_retriever(
+                        search_kwargs={"k": 2}
+                    )
+                    logger.info("After creating retrievers")
+
+                    chain = (
+                        {
+                            "resume_context": resume_retriever,
+                            "job_context": job_retriever,
+                            "question": lambda x: ANALYSIS_QUESTION,
+                        }
+                        | ANALYSIS_PROMPT
+                        | ollama
+                        | passthrough  # Simple output parsing
+                    )
+                    config = RunnableConfig(
+                        callbacks=None,
+                        configurable={
+                            "stop": None,
+                            "temperature": 0.3,
+                        },
+                    )
+                    logger.info("After creating chain")
+
+                    response = chain.invoke(
+                        "Analyze the resume based on the job description", config=config
+                    )
+                    logger.info("After invoking chain to generate response")
+                    return response, job_retriever, resume_retriever
+                else:
+                    logger.error("Failed to create vectorstores")
+                    return "Failed: Unable to process the files.", None, None
+            except Exception as e:
+                logger.error(f"Analysis failed: {e} | {traceback.format_exc()}")
                 return "Failed: Unable to process the files.", None, None
-        except Exception as e:
-            logger.error(f"Analysis failed: {e} | {traceback.format_exc()}")
-            return "Failed: Unable to process the files.", None, None
-        finally:
-            if "response" not in locals():
-                context_manager.clear_context()
-    else:
-        logger.error("Missing job text or resume text")
-        return "Failed: Missing job text or resume text.", None, None
+        else:
+            logger.error("Missing job text or resume text")
+            return "Failed: Missing job text or resume text.", None, None
+    finally:
+        context_manager.clear_context(request_id)
 
 
 def process_text(
     text: str,
     embeddings: CustomEmbeddings,
+    request_id: str,
 ) -> Optional[Chroma]:
     """Process text by splitting it into chunks, and creating a vectorstore."""
     if not text or not embeddings:
@@ -167,8 +170,8 @@ def process_text(
         return None
 
     text_splitter = RecursiveCharacterTextSplitter(
-        chunk_size=config.app_config.CHUNK_SIZE,
-        chunk_overlap=config.app_config.CHUNK_OVERLAP,
+        chunk_size=app_config.CHUNK_SIZE,
+        chunk_overlap=app_config.CHUNK_OVERLAP,
         length_function=lambda x: len(x.split()),
         separators=["\n\n", "\n", " ", ""],
     )
@@ -187,7 +190,10 @@ def process_text(
         if embeddings_list:
             logger.info(f"embeddings: {embeddings}")
             try:
-                vectorstore = Chroma.from_texts(texts=chunks, embedding=embeddings)
+                collection_name = f"{request_id}"
+                vectorstore = Chroma.from_texts(
+                    texts=chunks, embedding=embeddings, collection_name=collection_name
+                )
                 logger.info(f"vectorstore: {vectorstore}")
                 return vectorstore
             except Exception as e:

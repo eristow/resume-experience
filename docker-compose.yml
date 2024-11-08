@@ -53,6 +53,9 @@ services:
     ports:
       - '11434:11434'
 
+    # environment:
+    #   - OLLAMA_DEBUG=1
+
     deploy:
       resources:
         reservations:

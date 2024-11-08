@@ -1,5 +1,4 @@
 from datetime import datetime
-import logging
 from streamlit.runtime.uploaded_file_manager import UploadedFile
 from typing import Optional, Tuple
 import os
@@ -8,9 +7,10 @@ import pdf2image
 import pytesseract
 from pytesseract import Output
 import shutil
-import config
+import logging
+from config import app_config
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("root")
 
 
 def extract_text_from_uploaded_files(
@@ -36,7 +36,7 @@ def extract_text_from_uploaded_files(
 def get_file_extension(file: UploadedFile) -> Optional[str]:
     file_extension = file.name.split(".")[-1].lower()
 
-    if file_extension not in config.app_config.SUPPORTED_FILE_TYPES:
+    if file_extension not in app_config.SUPPORTED_FILE_TYPES:
         logger.error(f"Unsupported file type: {file_extension}")
         return None
 
@@ -113,7 +113,7 @@ def extract_text_from_image(file_path: str) -> str:
 
         for image in images:
             ocr_dict = pytesseract.image_to_data(
-                image, lang=config.app_config.OCR_LANG, output_type=Output.DICT
+                image, lang=app_config.OCR_LANG, output_type=Output.DICT
             )
             text += " ".join([word for word in ocr_dict["text"] if word])
     except Exception as e:
