@@ -9,7 +9,7 @@ class TestAppConfig:
         config = AppConfig()
         assert config.TEMP_DIR == Path("/tmp/resume-experience")
         assert config.LOG_LEVEL == "INFO"
-        assert config.CONTEXT_WINDOW == 4096
+        assert config.CONTEXT_WINDOW == 8192
         assert config.CHUNK_SIZE == 1024
         assert config.CHUNK_OVERLAP == 200
         assert config.OCR_LANG == "eng"

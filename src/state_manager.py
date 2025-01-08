@@ -5,8 +5,9 @@ from langchain_community.vectorstores import Chroma
 from langchain_community.chat_models import ChatOllama
 import config
 import logging
+from logger import setup_logging
 
-logger = logging.getLogger(__name__)
+logger = setup_logging()
 
 
 @dataclass

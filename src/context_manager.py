@@ -2,9 +2,9 @@ from langchain_chroma import Chroma
 from typing import Optional
 import gc
 import torch
-import logging
+from logger import setup_logging
 
-logger = logging.getLogger(__name__)
+logger = setup_logging()
 
 
 class ContextManager:
@@ -52,7 +52,6 @@ class ContextManager:
 
         except Exception as e:
             logger.error(f"Error during context cleanup: {e}")
-            # Continue with cleanup even if there's an error
 
         finally:
             # Ensure these are set to None even if cleanup fails

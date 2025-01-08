@@ -46,7 +46,7 @@ RUN apt-get update \
 	&& DEBIAN_FRONTEND=noninteractive flock /var/lib/dpkg/lock-frontend -c ' \
 	apt-get update \
 	&& apt-get install -y --no-install-recommends \
-	python3.12-minimal python3.12-dev python3.12-distutils python3.12-venv \
+	python3.12 python3.12-dev python3.12-venv \
 	python3-venv python3-pip build-essential \
 	' \
 	&& rm -rf /var/lib/apt/lists/*
@@ -92,7 +92,7 @@ RUN --mount=type=cache,target=/var/cache/apt \
 	&& add-apt-repository ppa:deadsnakes/ppa \
 	&& apt-get update \
 	&& apt-get install -y \
-	python3.12-minimal libpython3.12 curl \
+	python3.12 libpython3.12 curl \
 	poppler-utils tesseract-ocr \
 	&& rm -rf /var/lib/apt/lists/*
 

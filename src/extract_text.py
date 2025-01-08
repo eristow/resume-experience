@@ -9,8 +9,9 @@ import pytesseract
 from pytesseract import Output
 import shutil
 import config
+from logger import setup_logging
 
-logger = logging.getLogger(__name__)
+logger = setup_logging()
 
 
 def extract_text_from_uploaded_files(
@@ -100,7 +101,7 @@ def extract_text_from_file(
         logger.error(f"An error occurred while extracting text: {e}")
         return None
 
-    return None if not text else text
+    return text if text else None
 
 
 # Doesn't work if using uploaded_file. Only with file_path

@@ -2,6 +2,9 @@ import streamlit as st
 from analyze import get_chat_response
 from langchain_community.chat_models import ChatOllama
 from langchain_core.vectorstores import VectorStoreRetriever
+from logger import setup_logging
+
+logger = setup_logging()
 
 
 def render_chatbot():
