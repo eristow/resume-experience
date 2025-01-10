@@ -1,7 +1,7 @@
 from datetime import datetime
 import logging
 from streamlit.runtime.uploaded_file_manager import UploadedFile
-from typing import Optional, Tuple
+from typing import Optional
 import os
 import docx
 import pdf2image
@@ -16,22 +16,20 @@ logger = setup_logging()
 
 def extract_text_from_uploaded_files(
     job_file: UploadedFile,
-    resume_file: UploadedFile,
     temp_dir: str,
-) -> Tuple[Optional[str], Optional[str]]:
-    """Extracts text from uploaded job and resume files."""
-    if not job_file or not resume_file:
-        logger.error("No job or resume file provided")
+) -> Optional[str]:
+    """Extracts text from uploaded job files."""
+    if not job_file:
+        logger.error("No job file provided")
         return None, None
 
     start_time = datetime.now()
 
     job_text = extract_text("job", job_file, temp_dir)
-    resume_text = extract_text("resume", resume_file, temp_dir)
 
     logger.info(f"Time spent extracting text: {datetime.now() - start_time}")
 
-    return job_text, resume_text
+    return job_text
 
 
 def get_file_extension(file: UploadedFile) -> Optional[str]:

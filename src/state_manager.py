@@ -27,13 +27,13 @@ class AppState:
     def add_chat_message(self, role: str, content: str):
         self.chat_history.append({"role": role, "content": content})
 
-    def save_analysis_results(
-        self, result: str, job_retriever: Chroma, resume_retriever: Chroma
-    ):
-        self.result = result.content
-        self.job_retriever = job_retriever
-        self.resume_retriever = resume_retriever
-        logger.info(f"result: {result.content}")
+    # def save_analysis_results(
+    #     self, result: str, job_retriever: Chroma, resume_retriever: Chroma
+    # ):
+    #     self.result = result.content
+    #     self.job_retriever = job_retriever
+    #     self.resume_retriever = resume_retriever
+    #     logger.info(f"result: {result.content}")
 
 
 def initialize_state(st) -> None:
@@ -42,13 +42,26 @@ def initialize_state(st) -> None:
         st.session_state.app_state = AppState()
 
 
+def save_analysis_results(
+    st, result: str, job_retriever: Chroma, resume_retriever: Chroma
+):
+    st.session_state.result = result.content
+    st.session_state.job_retriever = job_retriever
+    st.session_state.resume_retriever = resume_retriever
+    logger.info(f"result: {result.content}")
+
+
 def reset_state_analysis(st) -> None:
     """Reset all session state variables related to analysis"""
     # TODO: is resetting chat history on new analysis desired behavior? Should we inform the user before hand?
-    st.session_state.app_state.chat_history = []
-    st.session_state.app_state.result = ""
-    st.session_state.app_state.job_retriever = None
-    st.session_state.app_state.resume_retriever = None
+    # st.session_state.app_state.chat_history = []
+    # st.session_state.app_state.result = ""
+    # st.session_state.app_state.job_retriever = None
+    # st.session_state.app_state.resume_retriever = None
+    st.session_state.chat_history = []
+    st.session_state.result = ""
+    st.session_state.job_retriever = None
+    st.session_state.resume_retriever = None
 
 
 def new_ollama_instance() -> ChatOllama:

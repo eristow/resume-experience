@@ -22,25 +22,24 @@ from langchain.prompts import ChatPromptTemplate
 # Ensure the 'Notes' section clearly explains how the years were calculated for both overall and relevant experience, and includes any additional considerations.
 # """
 
-# TODO: think about removing "Overall Experience" and "Relevant Experience", and only providing that info in the notes. Only one place for output instead of multiple.
 ANALYSIS_QUESTION = f"""
 **Instructions for Date Calculation:**
-- **Current Date:** Use `{datetime.now()}` as the current date for ongoing positions.
-- **Calculating Duration:** For each job, subtract the start date from the end date (or current date if ongoing).
-- **Overall Experience:** Sum the durations of all jobs. Do not double-count overlapping periods.
+- **Overall Experience:** Sum the durations of all jobs.
 - **Relevant Experience:** Include only roles that directly relate to the Job Description. Sum their durations similarly.
-- **Output Format:** Output in years and months.
+- **Output Format:** Output in years/months/days.
 
-Based on the Job Description, the provided Resume, and the Instructions for Date Calculation, calculate the number of years and months of relevant experience from the resume. Provide your answer in the following format:
+Based on the Job Description, the provided Resume, and the Instructions for Date Calculation, calculate the number of years/months/days of relevant experience from the resume. Provide your answer in the following format:
 
-'Overall Experience: X years | Relevant Experience: Y years | Notes: ...'
+'Notes: Explanation: ...'
 
-Replace X with the actual number of years of overall experience and Y with the actual number of years of relevant experience. In the 'Notes' section, provide a brief explanation of how the years were calculated and include any additional considerations such as gaps in employment or part-time work. Ensure each section is separated by |. Return an exact number for years of experience instead of "Over X years".
+In the 'Explanation' section, provide a brief explanation of how the years/months/days were calculated and include any additional considerations such as gaps in employment or part-time work. Ensure each section is separated by |.
 
-**Important:** Ensure the **Notes** section clearly explains how the years were calculated for both overall and relevant experience, including the start and end dates of each job, and any additional considerations.
+**Important:** Ensure the **Explanation** section clearly explains how the years/months/days were calculated for both overall and relevant experience, including the start and end dates of each job, and any additional considerations.
 """
 
-CHAT_QUESTION = f'Based on the Job Description and the provided Resume, answer the user provided question. If the output contains years of experience, they should be in years to the closest 0.5 year. Return an exact number for years of experience instead of "Over X years". For context and accurately calculating years of experience, the current date and time is {datetime.now()}.'
+CHAT_QUESTION = f"""
+Based on the Job Description and the provided Resume, answer the user-provided question. If the output contains years of experience, they should be in years/months/days.
+"""
 
 # Define the query prompt
 # QUERY_PROMPT_TEMPLATE = PromptTemplate(

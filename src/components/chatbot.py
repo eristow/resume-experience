@@ -27,9 +27,12 @@ def handle_chat(
         user_input, job_retriever, resume_retriever, ollama
     ).content
 
-    app_state = st.session_state.app_state
-    app_state.chat_history.append({"role": "User", "content": user_input})
-    app_state.chat_history.append({"role": "Assistant", "content": response})
+    # app_state = st.session_state.app_state
+    # app_state.chat_history.append({"role": "User", "content": user_input})
+    # app_state.chat_history.append({"role": "Assistant", "content": response})
+    st.session_state.chat_history.append({"role": "User", "content": user_input})
+    st.session_state.chat_history.append({"role": "Assistant", "content": response})
 
-    for chat in app_state.chat_history:
+    # for chat in app_state.chat_history:
+    for chat in st.session_state.chat_history:
         st.write(f"{chat['role']}:\n{chat['content']}")

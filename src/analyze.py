@@ -9,6 +9,7 @@ from langchain_community.chat_models import ChatOllama
 from langchain.prompts import ChatPromptTemplate
 from transformers import AutoTokenizer
 import logging
+import uuid
 from typing import Optional, Tuple, Union
 from custom_embeddings import CustomEmbeddings
 import config
@@ -107,23 +108,42 @@ def create_retrievers(
 
 
 def analyze_inputs(
+    st,
     job_text: str,
     resume_text: str,
     ollama: ChatOllama,
 ) -> analyze_inputs_return_type:
     """Analyzes the inputs by processing the job text and resume text using the Mistral model."""
-    context_manager.clear_context()
+    logger.info("Acquiring lock...")
+    is_lock_acquired = context_manager.usage_lock.take_lock(st.session_state.session_id)
+
+    if not is_lock_acquired:
+        logger.error("Failed to acquire lock")
+        return (
+            "Failed to acquire lock. Please try again in a few minutes...",
+            None,
+            None,
+        )
+
+    logger.info("Lock acquired. Clearing context...")
+    context_manager.clear_context(st.session_state.session_id)
+    logger.info("After clear_context:")
+    logger.info(f"context_manager.vectorstores: {context_manager.vectorstores}")
+
+    output = None
 
     if not (job_text and resume_text):
         logger.error("Missing job text or resume text")
-        return "Failed: Missing job text or resume text.", None, None
+
+        output = "Failed: Missing job text or resume text.", None, None
 
     try:
         total_tokens = verify_input_size(job_text, resume_text)
         logger.info(f"Total tokens (with overhead): {total_tokens}")
     except ValueError as e:
         logger.error(f"Input size verification failed: {e}")
-        return (
+
+        output = (
             "Failed: Input too large. Please reduce the size of the job description or resume.",
             None,
             None,
@@ -140,10 +160,12 @@ def analyze_inputs(
 
         if not (job_vectorstore and resume_vectorstore):
             logger.error("Failed to create vectorstores")
-            return "Failed: Unable to process the files.", None, None
+            output = "Failed: Unable to process the files.", None, None
 
         logger.info("Both vectorstores exist")
-        context_manager.register_vectorstores(job_vectorstore, resume_vectorstore)
+        context_manager.register_vectorstores(
+            st.session_state.session_id, job_vectorstore, resume_vectorstore
+        )
 
         job_retriever, resume_retriever = create_retrievers(
             job_vectorstore, resume_vectorstore
@@ -170,14 +192,20 @@ def analyze_inputs(
             "Analyze the resume based on the job description", config=config
         )
         logger.info("After invoking chain to generate response")
-        return response, job_retriever, resume_retriever
+        output = response, job_retriever, resume_retriever
 
     except Exception as e:
         logger.error(f"Analysis failed: {e} | {traceback.format_exc()}")
-        return "Failed: Unable to process the files.", None, None
+        output = "Failed: Unable to process the files.", None, None
+
     finally:
         if "response" not in locals():
-            context_manager.clear_context()
+            context_manager.clear_context(st.session_state.session_id)
+
+    logger.info("Releasing lock")
+    context_manager.usage_lock.release_lock(st.session_state.session_id)
+
+    return output
 
 
 def process_text(
