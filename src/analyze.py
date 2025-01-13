@@ -166,6 +166,7 @@ def analyze_inputs(
         context_manager.register_vectorstores(
             st.session_state.session_id, job_vectorstore, resume_vectorstore
         )
+        logger.info(f"context_manager.vectorstores: {context_manager.vectorstores}")
 
         job_retriever, resume_retriever = create_retrievers(
             job_vectorstore, resume_vectorstore

@@ -27,7 +27,7 @@ def create_job_row(num):
 
 
 def render_job_input():
-    st.write(st.session_state.job_rows)
+    # st.write(st.session_state.job_rows)
 
     if st.button("Add new job row"):
         st.session_state.job_rows.append(
@@ -37,7 +37,7 @@ def render_job_input():
     for i, row in enumerate(st.session_state.job_rows):
         new_row = create_job_row(i + 1)
 
-        if len(new_row.keys()) is 0:
+        if len(new_row.keys()) == 0:
             del st.session_state.job_rows[i]
         else:
             st.session_state.job_rows[i] = new_row

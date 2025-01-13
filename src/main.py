@@ -167,17 +167,17 @@ def main():
     # render_output_experience(app_state.result)
     render_output_experience(st.session_state.result)
 
-    if st.session_state.job_retriever:
-        st.write(st.session_state.job_retriever)
-        st.write(
-            f"job_retriever content: {st.session_state.job_retriever.vectorstore.similarity_search("What is the role?")}"
-        )
+    # if st.session_state.job_retriever:
+    #     st.write(st.session_state.job_retriever)
+    #     st.write(
+    #         f"job_retriever content: {st.session_state.job_retriever.vectorstore.similarity_search("What is the role?")}"
+    #     )
 
-    if st.session_state.resume_retriever:
-        st.write(st.session_state.resume_retriever)
-        st.write(
-            f"resume_retriever content: {st.session_state.resume_retriever.vectorstore.similarity_search("What is the name?")}"
-        )
+    # if st.session_state.resume_retriever:
+    #     st.write(st.session_state.resume_retriever)
+    #     st.write(
+    #         f"resume_retriever content: {st.session_state.resume_retriever.vectorstore.similarity_search("What is the name?")}"
+    #     )
 
     user_input = render_chatbot()
 
