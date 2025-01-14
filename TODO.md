@@ -1,7 +1,7 @@
 ## TODO:
 - [ ] Convert to using user-inputted job info, instead of having the LLM parse and do math
   - [x] Fix tests
-  - [ ] Add new tests for `components/job_input` and `logger`
+  - [x] Add new tests for `components/job_input` and `logger`
   - [ ] Figure out overlapping dates
   - [ ] Make a PR after this is done
 
