@@ -81,9 +81,13 @@ class ContextManager:
 
     def clear_context(self, session_id: uuid) -> None:
         """Clear all stored context and force garbage collection"""
+        logger.info("Clearing context_manager context...")
         try:
             # Check for existing vectorstore for session_id
             if session_id not in self.vectorstores:
+                logger.info(
+                    "session_id not in context_manager vectorstores. Returning..."
+                )
                 return
 
             # Clean up job vectorstore
@@ -115,13 +119,18 @@ class ContextManager:
         finally:
             # Ensure these are set to None even if cleanup fails
             if session_id not in self.vectorstores:
+                logger.info(
+                    "session_id not in context_manager vectorstores. Returning..."
+                )
                 return
 
             if (
                 "job_vectorstore" not in self.vectorstores[session_id]
                 or "resume_vectorstore" not in self.vectorstores[session_id]
             ):
+                logger.info(
+                    "No vectorstores for session_id in context_manager. Returning..."
+                )
                 return
 
-            self.vectorstores[session_id]["job_vectorstore"] = None
-            self.vectorstores[session_id]["resume_vectorstore"] = None
+            del self.vectorstores[session_id]

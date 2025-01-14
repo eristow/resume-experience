@@ -1,6 +1,8 @@
 ## TODO:
 - [ ] Convert to using user-inputted job info, instead of having the LLM parse and do math
-  - [ ] Fix tests
+  - [x] Fix tests
+  - [ ] Add new tests for `components/job_input` and `logger`
+  - [ ] Figure out overlapping dates
   - [ ] Make a PR after this is done
 
 - [ ] All vectorstores are being cleared when a new analysis happens

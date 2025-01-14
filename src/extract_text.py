@@ -21,7 +21,7 @@ def extract_text_from_uploaded_files(
     """Extracts text from uploaded job files."""
     if not job_file:
         logger.error("No job file provided")
-        return None, None
+        return None
 
     start_time = datetime.now()
 

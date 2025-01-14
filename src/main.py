@@ -11,7 +11,6 @@ from extract_text import extract_text_from_uploaded_files
 from analyze import analyze_inputs
 import config
 from state_manager import (
-    initialize_state,
     reset_state_analysis,
     new_ollama_instance,
     save_analysis_results,
@@ -40,8 +39,6 @@ def initialize_app():
     """Initialize the app on first run."""
     if not hasattr(st.session_state, "initialized"):
         load_dotenv()
-        # initialize_state(st)
-        # app_state = st.session_state.app_state
         st.session_state.result = ""
         st.session_state.job_retriever = None
         st.session_state.resume_retriever = None
@@ -80,7 +77,6 @@ def main():
     """
     initialize_app()
 
-    # app_state = st.session_state.app_state
     ollama = new_ollama_instance()
 
     st.title("Resume Experience Analyzer")
@@ -137,7 +133,6 @@ def main():
             )
 
             new_result, new_job_retriever, new_resume_retriever = analyze_inputs(
-                st,
                 st.session_state.job_text,
                 job_info,
                 ollama,
@@ -164,7 +159,6 @@ def main():
             )
             logger.info(f"Time spent analyzing: {datetime.now() - start_time}")
 
-    # render_output_experience(app_state.result)
     render_output_experience(st.session_state.result)
 
     # if st.session_state.job_retriever:
@@ -209,6 +203,7 @@ def main():
         )
 
         handle_chat(
+            st,
             user_input,
             st.session_state.job_retriever,
             st.session_state.resume_retriever,

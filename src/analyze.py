@@ -10,6 +10,7 @@ from langchain.prompts import ChatPromptTemplate
 from transformers import AutoTokenizer
 import logging
 import uuid
+import streamlit as st
 from typing import Optional, Tuple, Union
 from custom_embeddings import CustomEmbeddings
 import config
@@ -108,7 +109,6 @@ def create_retrievers(
 
 
 def analyze_inputs(
-    st,
     job_text: str,
     resume_text: str,
     ollama: ChatOllama,
@@ -137,71 +137,76 @@ def analyze_inputs(
 
         output = "Failed: Missing job text or resume text.", None, None
 
-    try:
-        total_tokens = verify_input_size(job_text, resume_text)
-        logger.info(f"Total tokens (with overhead): {total_tokens}")
-    except ValueError as e:
-        logger.error(f"Input size verification failed: {e}")
+    if output is None:
+        try:
+            total_tokens = verify_input_size(job_text, resume_text)
+            logger.info(f"Total tokens (with overhead): {total_tokens}")
+        except ValueError as e:
+            logger.error(f"Input size verification failed: {e}")
 
-        output = (
-            "Failed: Input too large. Please reduce the size of the job description or resume.",
-            None,
-            None,
-        )
+            output = (
+                "Failed: Input too large. Please reduce the size of the job description or resume.",
+                None,
+                None,
+            )
 
-    try:
-        embeddings = CustomEmbeddings(model_name="./models/mistral")
+    if output is None:
+        try:
+            embeddings = CustomEmbeddings(model_name="./models/mistral")
 
-        job_vectorstore = process_text(job_text, embeddings)
-        resume_vectorstore = process_text(resume_text, embeddings)
+            job_vectorstore = process_text(job_text, embeddings)
+            resume_vectorstore = process_text(resume_text, embeddings)
 
-        logger.info(f"job_vectorstore: {job_vectorstore}")
-        logger.info(f"resume_vectorstore: {resume_vectorstore}")
+            logger.info(f"job_vectorstore: {job_vectorstore}")
+            logger.info(f"resume_vectorstore: {resume_vectorstore}")
 
-        if not (job_vectorstore and resume_vectorstore):
-            logger.error("Failed to create vectorstores")
+            if not (job_vectorstore and resume_vectorstore):
+                logger.error("Failed to create vectorstores")
+                output = "Failed: Unable to process the files.", None, None
+
+            if output is None:
+                logger.info("Both vectorstores exist")
+                context_manager.register_vectorstores(
+                    st.session_state.session_id, job_vectorstore, resume_vectorstore
+                )
+                logger.info(
+                    f"context_manager.vectorstores: {context_manager.vectorstores}"
+                )
+
+                job_retriever, resume_retriever = create_retrievers(
+                    job_vectorstore, resume_vectorstore
+                )
+                logger.info("After creating retrievers")
+
+                chain = create_chain(
+                    resume_retriever=resume_retriever,
+                    job_retriever=job_retriever,
+                    ollama=ollama,
+                    prompt=ANALYSIS_PROMPT,
+                    question=ANALYSIS_QUESTION,
+                )
+                config = RunnableConfig(
+                    callbacks=None,
+                    configurable={
+                        "stop": None,
+                        "temperature": 0.3,
+                    },
+                )
+                logger.info("After creating chain")
+
+                response = chain.invoke(
+                    "Analyze the resume based on the job description", config=config
+                )
+                logger.info("After invoking chain to generate response")
+                output = response, job_retriever, resume_retriever
+
+        except Exception as e:
+            logger.error(f"Analysis failed: {e} | {traceback.format_exc()}")
             output = "Failed: Unable to process the files.", None, None
 
-        logger.info("Both vectorstores exist")
-        context_manager.register_vectorstores(
-            st.session_state.session_id, job_vectorstore, resume_vectorstore
-        )
-        logger.info(f"context_manager.vectorstores: {context_manager.vectorstores}")
-
-        job_retriever, resume_retriever = create_retrievers(
-            job_vectorstore, resume_vectorstore
-        )
-        logger.info("After creating retrievers")
-
-        chain = create_chain(
-            resume_retriever=resume_retriever,
-            job_retriever=job_retriever,
-            ollama=ollama,
-            prompt=ANALYSIS_PROMPT,
-            question=ANALYSIS_QUESTION,
-        )
-        config = RunnableConfig(
-            callbacks=None,
-            configurable={
-                "stop": None,
-                "temperature": 0.3,
-            },
-        )
-        logger.info("After creating chain")
-
-        response = chain.invoke(
-            "Analyze the resume based on the job description", config=config
-        )
-        logger.info("After invoking chain to generate response")
-        output = response, job_retriever, resume_retriever
-
-    except Exception as e:
-        logger.error(f"Analysis failed: {e} | {traceback.format_exc()}")
-        output = "Failed: Unable to process the files.", None, None
-
-    finally:
-        if "response" not in locals():
-            context_manager.clear_context(st.session_state.session_id)
+        finally:
+            if "response" not in locals():
+                context_manager.clear_context(st.session_state.session_id)
 
     logger.info("Releasing lock")
     context_manager.usage_lock.release_lock(st.session_state.session_id)
