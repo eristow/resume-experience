@@ -79,58 +79,88 @@ class ContextManager:
         self.vectorstores[session_id]["job_vectorstore"] = job_store
         self.vectorstores[session_id]["resume_vectorstore"] = resume_store
 
+    def _cleanup_embeddings(self, vectorstore: Optional[Chroma]) -> None:
+        """Helper method to clean up embeddings from a vectorstore"""
+        if vectorstore is not None:
+            try:
+                if hasattr(vectorstore, "_embeddings"):
+                    embeddings = vectorstore._embeddings
+
+                    if hasattr(embeddings, "cleanup"):
+                        logger.info("Cleaning up embeddings model...")
+                        embeddings.cleanup()
+                    elif hasattr(embeddings, "_model"):
+                        if embeddings._model is not None:
+                            logger.info("Performing fallback embeddings cleanup...")
+                            embeddings._model.cpu()
+                            del embeddings._model
+                            embeddings._model = None
+
+                        if hasattr(embeddings, "_tokenizer"):
+                            del embeddings._tokenizer
+                            embeddings._tokenizer = None
+
+            except Exception as e:
+                logger.error(f"Error during embeddings cleanup: {e}")
+
+    def _cleanup_vectorstore(
+        self, vectorstore: Optional[Chroma], store_name: str, session_id: uuid
+    ) -> None:
+        """Helper method to clean up a vectorstore and its resources"""
+
+        if vectorstore is not None:
+            try:
+                logger.info(f"Cleaning up {store_name}...")
+
+                self._cleanup_embeddings(vectorstore)
+
+                ids = vectorstore.get().get("ids", [])
+                if ids:
+                    vectorstore.delete(ids=ids)
+
+                try:
+                    vectorstore.delete_collection()
+                except Exception as e:
+                    logger.error(f"Error deleting collection: {e}")
+
+                self.vectorstores[session_id][store_name] = None
+
+            except Exception as e:
+                logger.error(f"Error during {store_name} cleanup: {e}")
+
     def clear_context(self, session_id: uuid) -> None:
         """Clear all stored context and force garbage collection"""
         logger.info("Clearing context_manager context...")
+
         try:
-            # Check for existing vectorstore for session_id
             if session_id not in self.vectorstores:
                 logger.info(
                     "session_id not in context_manager vectorstores. Returning..."
                 )
                 return
 
-            # Clean up job vectorstore
-            if self.vectorstores[session_id]["job_vectorstore"] is not None:
-                collection = self.vectorstores[session_id]["job_vectorstore"]
-                if collection is not None:
-                    ids = collection.get().get("ids", [])
-                    if ids:
-                        collection.delete(ids=ids)
-                self.vectorstores[session_id]["job_vectorstore"] = None
+            self._cleanup_vectorstore(
+                self.vectorstores[session_id].get("job_vectorstore"),
+                "job_vectorstore",
+                session_id,
+            )
+            self._cleanup_vectorstore(
+                self.vectorstores[session_id].get("resume_vectorstore"),
+                "resume_vectorstore",
+                session_id,
+            )
 
-            # Clean up resume vectorstore
-            if self.vectorstores[session_id]["resume_vectorstore"] is not None:
-                collection = self.vectorstores[session_id]["resume_vectorstore"]
-                if collection is not None:
-                    ids = collection.get().get("ids", [])
-                    if ids:
-                        collection.delete(ids=ids)
-                self.vectorstores[session_id]["resume_vectorstore"] = None
+            del self.vectorstores[session_id]
 
             # Force garbage collection
             gc.collect()
             if torch.cuda.is_available():
+                logger.info("Clearing CUDA cache...")
                 torch.cuda.empty_cache()
 
         except Exception as e:
             logger.error(f"Error during context cleanup: {e}")
 
-        finally:
-            # Ensure these are set to None even if cleanup fails
-            if session_id not in self.vectorstores:
-                logger.info(
-                    "session_id not in context_manager vectorstores. Returning..."
-                )
-                return
-
-            if (
-                "job_vectorstore" not in self.vectorstores[session_id]
-                or "resume_vectorstore" not in self.vectorstores[session_id]
-            ):
-                logger.info(
-                    "No vectorstores for session_id in context_manager. Returning..."
-                )
-                return
-
-            del self.vectorstores[session_id]
+            # Ensure the session is removed even if cleanup fails
+            if session_id in self.vectorstores:
+                del self.vectorstores[session_id]

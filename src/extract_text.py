@@ -9,6 +9,7 @@ import pytesseract
 from pytesseract import Output
 import shutil
 import config
+import re
 from logger import setup_logging
 
 logger = setup_logging()
@@ -29,7 +30,7 @@ def extract_text_from_uploaded_files(
 
     logger.info(f"Time spent extracting text: {datetime.now() - start_time}")
 
-    return job_text
+    return re.sub("description", "", job_text, flags=re.IGNORECASE)
 
 
 def get_file_extension(file: UploadedFile) -> Optional[str]:

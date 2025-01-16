@@ -9,7 +9,7 @@ def render_file_upload() -> Optional[UploadedFile]:
 
     with st.form("input_file_form", border=False):
         job_file = st.file_uploader(
-            "Upload Job Description", type=["pdf", "doc", "docx"], key="job_file"
+            "Upload Job Ad", type=["pdf", "doc", "docx"], key="job_file"
         )
 
         submit = st.form_submit_button("Extract Text")

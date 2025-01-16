@@ -50,6 +50,7 @@ def initialize_app():
             {"job": None, "start_date": None, "end_date": None, "description": ""}
         ]
         st.session_state.job_info = []
+        st.session_state.using_dev_data = False
 
         logger.info("Starting the Resume Experience Analyzer app...")
         os.makedirs(config.app_config.TEMP_DIR, exist_ok=True)
@@ -72,7 +73,7 @@ def main():
     """
     Main function for the Resume Experience Analyzer application.
 
-    This function handles the user interface and logic for uploading job descriptions and resumes,
+    This function handles the user interface and logic for uploading job ads and resumes,
     analyzing the inputs, and displaying the results.
     """
     initialize_app()
@@ -82,7 +83,7 @@ def main():
     st.title("Resume Experience Analyzer")
 
     st.write(
-        "This app will compare a job description to a resume and extract the number of years of relevant work experience from the resume."
+        "This app will compare a job ad to a resume and extract the number of years of relevant work experience from the resume."
     )
 
     with st.container(border=True):
@@ -90,9 +91,7 @@ def main():
         job_file = render_file_upload()
 
         if job_file is None:
-            st.write(
-                "Please upload a job description to auto-populate the text area below."
-            )
+            st.write("Please upload a job ad to auto-populate the text area below.")
         else:
             st.session_state.job_text = extract_text_from_uploaded_files(
                 job_file, config.app_config.TEMP_DIR
@@ -108,33 +107,59 @@ def main():
 
         job_info = ""
 
-        # TODO: figure out how to handle overlapping dates...
-        for i in range(len(st.session_state.job_rows)):
-            data = st.session_state.job_rows[i]
-            logger.info(f"data {i}: {data}")
+        # Validate job rows
 
+        valid_jobs = [
+            row
+            for row in st.session_state.job_rows
+            if row["job"]
+            and row["start_date"]
+            and row["end_date"]
+            and row["description"]
+        ]
+
+        # Create job info string
+        job_info = ""
+        job_lengths = []
+
+        for i, data in enumerate(valid_jobs):
             job_length = relativedelta(data["end_date"], data["start_date"])
+            job_lengths.append(job_length)
 
             job_info += f"JOB {i + 1} | "
-            job_info += f"{data["job"]} | "
-            job_info += f"{job_length.years} years, {job_length.months} months, {job_length.days} days | "
-            job_info += f"{data["description"]}\n"
+            job_info += f"{data['job']} | "
+            job_info += f"Length of job: {job_length.years} years, {job_length.months} months, {job_length.days} days | "
+            job_info += f"{data['description']}\n"
 
-        logger.info(f"job_info: {job_info}")
+        total_job_lengths = None
+        logger.info(f"job_lengths: {job_lengths}")
+        for length in job_lengths:
+            logger.info(f"length: {length}")
+            if total_job_lengths is None:
+                total_job_lengths = length
+            else:
+                total_job_lengths += length
+
+        total_job_info = (
+            f"Total length of jobs: {total_job_lengths.years} years, {total_job_lengths.months} months, {total_job_lengths.days} days | \n"
+            + job_info
+        )
+
+        logger.info(f"total_job_info: {total_job_info}")
 
         with st.spinner("Processing (this can take a few minutes)..."):
-            if not st.session_state.job_text or not job_info:
-                st.write("Please upload a job description and a resume first.")
+            if not st.session_state.job_text or not total_job_info:
+                st.write("Please upload a job ad and a resume first.")
                 return
 
             log_texts(
                 st.session_state.job_text,
-                job_info,
+                total_job_info,
             )
 
             new_result, new_job_retriever, new_resume_retriever = analyze_inputs(
                 st.session_state.job_text,
-                job_info,
+                total_job_info,
                 ollama,
             )
 
@@ -143,13 +168,7 @@ def main():
                 return
 
             logger.info(f"new_job_retriever: {new_job_retriever}")
-            logger.info(
-                f"new_job_retriever content: {new_job_retriever.vectorstore.similarity_search("What is the role?")}"
-            )
             logger.info(f"new_resume_retriever: {new_resume_retriever}")
-            logger.info(
-                f"new_resume_retriever content: {new_resume_retriever.vectorstore.similarity_search("What is the name?")}"
-            )
 
             # app_state.save_analysis_results(
             #     new_result, new_job_retriever, new_resume_retriever
@@ -188,19 +207,9 @@ def main():
             or (st.session_state.resume_retriever == None)
         ):
             st.write(
-                "Please input the job description, the job experience from the resume, and perform an analysis first."
+                "Please input the job ad, the job experience from the resume, and perform an analysis first."
             )
             return
-
-        logger.info(f"st.session_state {st.session_state}")
-        logger.info(f"job_retriever: {st.session_state.job_retriever}")
-        logger.info(
-            f"job_retriever content: {st.session_state.job_retriever.vectorstore.similarity_search("What is the role?")}"
-        )
-        logger.info(f"resume_retriever: {st.session_state.resume_retriever}")
-        logger.info(
-            f"resume_retriever content: {st.session_state.resume_retriever.vectorstore.similarity_search("What is the name?")}"
-        )
 
         handle_chat(
             st,

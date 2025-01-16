@@ -81,7 +81,7 @@ def create_chain(
     job_retriever,
     resume_retriever,
     ollama: ChatOllama,
-    question: ChatPromptTemplate,
+    # question: ChatPromptTemplate,
     prompt: str,
     user_input=None,
 ) -> RunnablePassthrough:
@@ -89,7 +89,7 @@ def create_chain(
     context = {
         "resume_context": resume_retriever,
         "job_context": job_retriever,
-        "question": lambda x: question,
+        # "question": lambda x: question,
     }
 
     if user_input:
@@ -131,10 +131,10 @@ def analyze_inputs(
     logger.info(f"context_manager.vectorstores: {context_manager.vectorstores}")
 
     output = None
+    embeddings = None
 
     if not (job_text and resume_text):
         logger.error("Missing job text or resume text")
-
         output = "Failed: Missing job text or resume text.", None, None
 
     if output is None:
@@ -145,7 +145,7 @@ def analyze_inputs(
             logger.error(f"Input size verification failed: {e}")
 
             output = (
-                "Failed: Input too large. Please reduce the size of the job description or resume.",
+                "Failed: Input too large. Please reduce the size of the job ad or resume.",
                 None,
                 None,
             )
@@ -153,11 +153,22 @@ def analyze_inputs(
     if output is None:
         try:
             embeddings = CustomEmbeddings(model_name="./models/mistral")
+            logger.info(f"Created embeddings instance")
 
-            job_vectorstore = process_text(job_text, embeddings)
-            resume_vectorstore = process_text(resume_text, embeddings)
-
+            job_vectorstore = process_text(
+                job_text,
+                embeddings,
+                collection_name=f"job_{st.session_state.session_id}",
+            )
+            logger.info(f"Created job vectorstore: {job_vectorstore}")
             logger.info(f"job_vectorstore: {job_vectorstore}")
+
+            resume_vectorstore = process_text(
+                resume_text,
+                embeddings,
+                collection_name=f"resume_{st.session_state.session_id}",
+            )
+            logger.info(f"Created resume vectorstore: {resume_vectorstore}")
             logger.info(f"resume_vectorstore: {resume_vectorstore}")
 
             if not (job_vectorstore and resume_vectorstore):
@@ -183,7 +194,7 @@ def analyze_inputs(
                     job_retriever=job_retriever,
                     ollama=ollama,
                     prompt=ANALYSIS_PROMPT,
-                    question=ANALYSIS_QUESTION,
+                    # question=ANALYSIS_QUESTION,
                 )
                 config = RunnableConfig(
                     callbacks=None,
@@ -208,6 +219,9 @@ def analyze_inputs(
             if "response" not in locals():
                 context_manager.clear_context(st.session_state.session_id)
 
+            if embeddings:
+                embeddings.cleanup()
+
     logger.info("Releasing lock")
     context_manager.usage_lock.release_lock(st.session_state.session_id)
 
@@ -215,13 +229,19 @@ def analyze_inputs(
 
 
 def process_text(
-    text: str,
-    embeddings: CustomEmbeddings,
+    text: str, embeddings: CustomEmbeddings, collection_name: str = None
 ) -> Optional[Chroma]:
     """Process text by splitting it into chunks, and creating a vectorstore."""
     if not text or not embeddings:
         logger.error("Missing text or embeddings")
         return None
+
+    if collection_name is None:
+        collection_name = str(uuid.uuid4())
+
+    # Create a unique directory for this vectorstore
+    persist_directory = os.path.join(config.app_config.TEMP_DIR, collection_name)
+    os.makedirs(persist_directory, exist_ok=True)
 
     text_splitter = RecursiveCharacterTextSplitter(
         chunk_size=config.app_config.CHUNK_SIZE,
@@ -233,24 +253,27 @@ def process_text(
 
     chunks = text_splitter.split_text(text)
     logger.info("chunks created from text_splitter")
+
     for i, chunk in enumerate(chunks):
-        token_count = len(embeddings.get_tokenizer(embeddings.model_name).encode(chunk))
+        token_count = len(embeddings.get_tokenizer().encode(chunk))
         logger.info(f"Chunk {i} token count: {token_count}")
 
     if not (chunks and embeddings):
         logger.error("Missing chunks or embeddings")
         return None
 
-    embeddings_list = embeddings.embed_documents(chunks)
-    logger.info("embeddings_list created")
-
-    if not embeddings_list:
-        logger.error("Missing embeddings_list")
-        return None
-
     logger.info(f"embeddings: {embeddings}")
     try:
-        vectorstore = Chroma.from_texts(texts=chunks, embedding=embeddings)
+        logger.info(f"chunks: {chunks[0][:50]}")
+
+        vectorstore = Chroma.from_texts(
+            texts=chunks,
+            embedding=embeddings,
+            collection_name=collection_name,
+            persist_directory=persist_directory,
+        )
+
+        logger.info(f"Created vectorstore for collection: {collection_name}")
         logger.info(f"vectorstore: {vectorstore}")
         return vectorstore
     except Exception as e:
@@ -278,7 +301,7 @@ def get_chat_response(
         job_retriever=job_retriever,
         user_input=user_input,
         prompt=CHAT_PROMPT,
-        question=CHAT_QUESTION,
+        # question=CHAT_QUESTION,
         ollama=ollama,
     )
 
