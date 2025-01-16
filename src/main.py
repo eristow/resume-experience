@@ -18,7 +18,7 @@ from state_manager import (
 from components.file_upload import render_file_upload
 from components.text_display import render_text_display
 from components.output_experience import render_output_experience
-from components.chatbot import render_chatbot, handle_chat
+from components.chatbot import render_chatbot, handle_chat, cleanup_chat_resources
 from components.job_input import render_job_input
 from logger import setup_logging
 
@@ -60,6 +60,7 @@ def initialize_app():
 
 def cleanup():
     """Clean up resources when the session ends."""
+    cleanup_chat_resources(st)
     if os.path.exists(config.app_config.TEMP_DIR):
         shutil.rmtree(config.app_config.TEMP_DIR)
         logger.info("Closing the Resume Experience Analyzer app...")

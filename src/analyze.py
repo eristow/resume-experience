@@ -296,15 +296,34 @@ def get_chat_response(
     if not user_input or not job_retriever or not resume_retriever:
         return None
 
-    chain = create_chain(
-        resume_retriever=resume_retriever,
-        job_retriever=job_retriever,
-        user_input=user_input,
-        prompt=CHAT_PROMPT,
-        # question=CHAT_QUESTION,
-        ollama=ollama,
-    )
+    try:
+        chain = create_chain(
+            resume_retriever=resume_retriever,
+            job_retriever=job_retriever,
+            user_input=user_input,
+            prompt=CHAT_PROMPT,
+            ollama=ollama,
+        )
 
-    response = chain.invoke(user_input)
-    logger.info("Chat response created")
-    return response
+        response = chain.invoke(user_input)
+        logger.info("Chat response created")
+        return response
+
+    except Exception as e:
+        logger.error(f"Error in chat response: {e}")
+        raise
+
+    finally:
+        # Clean up chain resources
+        if "chain" in locals():
+            del chain
+
+        # Force cleanup of embeddings after each chat response
+        if hasattr(job_retriever, "vectorstore") and hasattr(
+            job_retriever.vectorstore, "_embeddings"
+        ):
+            job_retriever.vectorstore._embeddings.cleanup()
+        if hasattr(resume_retriever, "vectorstore") and hasattr(
+            resume_retriever.vectorstore, "_embeddings"
+        ):
+            resume_retriever.vectorstore._embeddings.cleanup()
