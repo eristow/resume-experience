@@ -6,14 +6,15 @@ import os
 
 @dataclass
 class AppConfig:
-    TEMP_DIR: Path = Path("/tmp/resume-experience")
-    LOG_LEVEL: str = "INFO"
-    CONTEXT_WINDOW: int = 8192
-    CHUNK_SIZE: int = 1024
-    CHUNK_OVERLAP: int = 200
-    OCR_LANG: str = "eng"
-    SUPPORTED_FILE_TYPES: list = field(default_factory=lambda: ["pdf", "doc", "docx"])
-    OLLAMA_BASE_URL: str = "http://ollama:11434"
+    TEMP_DIR: Path
+    LOG_LEVEL: str
+    CONTEXT_WINDOW: int
+    CHUNK_SIZE: int
+    CHUNK_OVERLAP: int
+    OCR_LANG: str
+    SUPPORTED_FILE_TYPES: list
+    OLLAMA_BASE_URL: str
+    ENABLE_DEV_FEATURES: bool
 
     @classmethod
     def from_env(cls) -> "AppConfig":
@@ -29,6 +30,7 @@ class AppConfig:
                 "SUPPORTED_FILE_TYPES", "pdf,doc,docx"
             ).split(","),
             OLLAMA_BASE_URL=os.getenv("OLLAMA_BASE_URL", "http://ollama:11434"),
+            ENABLE_DEV_FEATURES=os.getenv("ENABLE_DEV_FEATURES", "False") == "True",
         )
 
 

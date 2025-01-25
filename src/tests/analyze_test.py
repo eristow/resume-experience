@@ -153,7 +153,10 @@ class TestAnalyzeInputs:
         assert mock_process_text.call_count == 2
 
         mock_process_text.assert_has_calls(
-            [call(job_text, mock_embeddings), call(resume_text, mock_embeddings)],
+            [
+                call(job_text, mock_embeddings, collection_name="job_1234"),
+                call(resume_text, mock_embeddings, collection_name="resume_1234"),
+            ],
             any_order=True,
         )
 

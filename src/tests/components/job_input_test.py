@@ -15,6 +15,8 @@ class TestRenderJobInput:
                 "description": "test4",
             }
         ]
+        at.session_state.using_dev_data = False
+        at.session_state.enable_dev_features = False
         at.run()
 
         assert not at.exception

@@ -1,28 +1,31 @@
 ## TODO:
-- [ ] Fix tests, add new ones
-  - [ ] Then make a PR
-
 - [ ] Use same uuid in `context_manager` and `logging`
 
 - [ ] Clean up code to not call `st.session_state` as much
   - Example: start of `user_input` to chatbot in `main.py`
 
-- [ ] Add a startup process for the Streamlit container so don't have to do an initial request to warm up the model
-  - Potentially just load the model in the background
-
-- [ ] Split up the tuned Mistral model from the Streamlit container
+ [ ] Split up the tuned Mistral model from the Streamlit container
   - 3 total containers: Streamlit, Ollama, Mistral
   - Streamlit will have to make API calls to Mistral
   - Mistral container will have a light API wrapper around the model
 
-- [ ] Add actual concurrency for analysis?
-  - Is this needed?
-  - Separation of vectorstores is a pre-req
-
 - [ ] For prod, probably just a VM with Docker and Docker Compose?
   - Make sure hot reload is turned off.
 
+
+## EXTRA:
+- [ ] Add actual concurrency for analysis?
+  - Is this needed?
+
+- [ ] Add a startup process for the Streamlit container so don't have to do an initial request to warm up the model
+  - **Since analyze is now locked and will only perform one at a time, we won't need this.**
+  - Potentially just load the model in the background
+
+
 ## DONE:
+- [x] Fix tests, add new ones
+  - [x] Comment out auto-resume buttons
+  - [x] Then make a PR
 - [x] Convert to using user-inputted job info, instead of having the LLM parse and do math
   - [x] Fix tests
   - [x] Add new tests for `components/job_input` and `logger`
