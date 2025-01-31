@@ -1,4 +1,12 @@
 ## TODO:
+- [ ] Add confirmation dialog to Analyze button
+  - [ ] "This will delete chatbot history. Continue?"
+  - [ ] Maybe don't delete chat history if failed to acquire analyze lock
+
+- [ ] Part-time job toggle
+  - [ ] Divide duration before feeding it into the LLM
+  - [ ] Add additional section to work experience when passing it into analyze
+
 - [ ] Use same uuid in `context_manager` and `logging`
 
 - [ ] Clean up code to not call `st.session_state` as much

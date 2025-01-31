@@ -52,7 +52,7 @@ def initialize_app():
         st.session_state.job_info = []
         st.session_state.using_dev_data = False
         st.session_state.enable_dev_features = config.app_config.ENABLE_DEV_FEATURES
-        print(f"enable_dev_features: {st.session_state.enable_dev_features}")
+        print(f"init: enable_dev_features: {st.session_state.enable_dev_features}")
 
         logger.info("Starting the Resume Experience Analyzer app...")
         os.makedirs(config.app_config.TEMP_DIR, exist_ok=True)
