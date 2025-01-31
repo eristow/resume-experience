@@ -3,11 +3,14 @@ import traceback
 from datetime import datetime
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_chroma import Chroma
-from langchain_core.runnables import RunnableConfig
+from langchain_core.runnables import RunnableConfig, RunnablePassthrough
 from langchain_core.vectorstores import VectorStoreRetriever
 from langchain_community.chat_models import ChatOllama
+from langchain.prompts import ChatPromptTemplate
 from transformers import AutoTokenizer
 import logging
+import uuid
+import streamlit as st
 from typing import Optional, Tuple, Union
 from custom_embeddings import CustomEmbeddings
 import config
@@ -19,8 +22,9 @@ from prompts import (
     passthrough,
 )
 from context_manager import ContextManager
+from logger import setup_logging
 
-logger = logging.getLogger(__name__)
+logger = setup_logging()
 context_manager = ContextManager()
 
 analyze_inputs_return_type = Union[Tuple[str, Chroma, Chroma], Tuple[str, None, None]]
@@ -73,61 +77,124 @@ def verify_input_size(
     return total_tokens
 
 
+def create_chain(
+    job_retriever,
+    resume_retriever,
+    ollama: ChatOllama,
+    # question: ChatPromptTemplate,
+    prompt: str,
+    user_input=None,
+) -> RunnablePassthrough:
+    """Creates the chain for analyzing job and resume text."""
+    context = {
+        "resume_context": resume_retriever,
+        "job_context": job_retriever,
+        # "question": lambda x: question,
+    }
+
+    if user_input:
+        context["user_input"] = lambda x: user_input
+
+    return context | prompt | ollama | passthrough
+
+
+def create_retrievers(
+    job_vectorstore: Chroma,
+    resume_vectorstore: Chroma,
+) -> Tuple[VectorStoreRetriever, VectorStoreRetriever]:
+    """Creates retrievers from vectorstores with consistent settings"""
+    job_retriever = job_vectorstore.as_retriever(search_kwargs={"k": 2})
+    resume_retriever = resume_vectorstore.as_retriever(search_kwargs={"k": 2})
+    return job_retriever, resume_retriever
+
+
 def analyze_inputs(
     job_text: str,
     resume_text: str,
     ollama: ChatOllama,
 ) -> analyze_inputs_return_type:
     """Analyzes the inputs by processing the job text and resume text using the Mistral model."""
-    context_manager.clear_context()
+    logger.info("Acquiring lock...")
+    is_lock_acquired = context_manager.usage_lock.take_lock(st.session_state.session_id)
 
-    if job_text and resume_text:
+    if not is_lock_acquired:
+        logger.error("Failed to acquire lock")
+        return (
+            "Failed to acquire lock. Please try again in a few minutes...",
+            None,
+            None,
+        )
+
+    logger.info("Lock acquired. Clearing context...")
+    context_manager.clear_context(st.session_state.session_id)
+    logger.info("After clear_context:")
+    logger.info(f"context_manager.vectorstores: {context_manager.vectorstores}")
+
+    output = None
+    embeddings = None
+
+    if not (job_text and resume_text):
+        logger.error("Missing job text or resume text")
+        output = "Failed: Missing job text or resume text.", None, None
+
+    if output is None:
         try:
             total_tokens = verify_input_size(job_text, resume_text)
             logger.info(f"Total tokens (with overhead): {total_tokens}")
         except ValueError as e:
             logger.error(f"Input size verification failed: {e}")
-            return (
-                "Failed: Input too large. Please reduce the size of the job description or resume.",
+
+            output = (
+                "Failed: Input too large. Please reduce the size of the job ad or resume.",
                 None,
                 None,
             )
 
+    if output is None:
         try:
             embeddings = CustomEmbeddings(model_name="./models/mistral")
+            logger.info(f"Created embeddings instance")
 
             job_vectorstore = process_text(
                 job_text,
                 embeddings,
+                collection_name=f"job_{st.session_state.session_id}",
             )
+            logger.info(f"Created job vectorstore: {job_vectorstore}")
+            logger.info(f"job_vectorstore: {job_vectorstore}")
+
             resume_vectorstore = process_text(
                 resume_text,
                 embeddings,
+                collection_name=f"resume_{st.session_state.session_id}",
             )
-
-            logger.info(f"job_vectorstore: {job_vectorstore}")
+            logger.info(f"Created resume vectorstore: {resume_vectorstore}")
             logger.info(f"resume_vectorstore: {resume_vectorstore}")
 
-            if job_vectorstore and resume_vectorstore:
+            if not (job_vectorstore and resume_vectorstore):
+                logger.error("Failed to create vectorstores")
+                output = "Failed: Unable to process the files.", None, None
+
+            if output is None:
                 logger.info("Both vectorstores exist")
                 context_manager.register_vectorstores(
-                    job_vectorstore, resume_vectorstore
+                    st.session_state.session_id, job_vectorstore, resume_vectorstore
                 )
-                job_retriever = job_vectorstore.as_retriever(search_kwargs={"k": 2})
-                resume_retriever = resume_vectorstore.as_retriever(
-                    search_kwargs={"k": 2}
+                logger.info(
+                    f"context_manager.vectorstores: {context_manager.vectorstores}"
+                )
+
+                job_retriever, resume_retriever = create_retrievers(
+                    job_vectorstore, resume_vectorstore
                 )
                 logger.info("After creating retrievers")
 
-                chain = (
-                    {
-                        "resume_context": resume_retriever,
-                        "job_context": job_retriever,
-                        "question": lambda x: ANALYSIS_QUESTION,
-                    }
-                    | ANALYSIS_PROMPT
-                    | ollama
-                    | passthrough  # Simple output parsing
+                chain = create_chain(
+                    resume_retriever=resume_retriever,
+                    job_retriever=job_retriever,
+                    ollama=ollama,
+                    prompt=ANALYSIS_PROMPT,
+                    # question=ANALYSIS_QUESTION,
                 )
                 config = RunnableConfig(
                     callbacks=None,
@@ -142,29 +209,39 @@ def analyze_inputs(
                     "Analyze the resume based on the job description", config=config
                 )
                 logger.info("After invoking chain to generate response")
-                return response, job_retriever, resume_retriever
-            else:
-                logger.error("Failed to create vectorstores")
-                return "Failed: Unable to process the files.", None, None
+                output = response, job_retriever, resume_retriever
+
         except Exception as e:
             logger.error(f"Analysis failed: {e} | {traceback.format_exc()}")
-            return "Failed: Unable to process the files.", None, None
+            output = "Failed: Unable to process the files.", None, None
+
         finally:
             if "response" not in locals():
-                context_manager.clear_context()
-    else:
-        logger.error("Missing job text or resume text")
-        return "Failed: Missing job text or resume text.", None, None
+                context_manager.clear_context(st.session_state.session_id)
+
+            if embeddings:
+                embeddings.cleanup()
+
+    logger.info("Releasing lock")
+    context_manager.usage_lock.release_lock(st.session_state.session_id)
+
+    return output
 
 
 def process_text(
-    text: str,
-    embeddings: CustomEmbeddings,
+    text: str, embeddings: CustomEmbeddings, collection_name: str = None
 ) -> Optional[Chroma]:
     """Process text by splitting it into chunks, and creating a vectorstore."""
     if not text or not embeddings:
         logger.error("Missing text or embeddings")
         return None
+
+    if collection_name is None:
+        collection_name = str(uuid.uuid4())
+
+    # Create a unique directory for this vectorstore
+    persist_directory = os.path.join(config.app_config.TEMP_DIR, collection_name)
+    os.makedirs(persist_directory, exist_ok=True)
 
     text_splitter = RecursiveCharacterTextSplitter(
         chunk_size=config.app_config.CHUNK_SIZE,
@@ -176,25 +253,33 @@ def process_text(
 
     chunks = text_splitter.split_text(text)
     logger.info("chunks created from text_splitter")
+
     for i, chunk in enumerate(chunks):
-        token_count = len(embeddings.get_tokenizer(embeddings.model_name).encode(chunk))
+        token_count = len(embeddings.get_tokenizer().encode(chunk))
         logger.info(f"Chunk {i} token count: {token_count}")
 
-    if chunks and embeddings:
-        embeddings_list = embeddings.embed_documents(chunks)
-        logger.info("embeddings_list created")
+    if not (chunks and embeddings):
+        logger.error("Missing chunks or embeddings")
+        return None
 
-        if embeddings_list:
-            logger.info(f"embeddings: {embeddings}")
-            try:
-                vectorstore = Chroma.from_texts(texts=chunks, embedding=embeddings)
-                logger.info(f"vectorstore: {vectorstore}")
-                return vectorstore
-            except Exception as e:
-                logger.error("An error occurred while creating the vectorstore:")
-                traceback.print_exception(type(e), e, e.__traceback__)
-                return None
-    return None
+    logger.info(f"embeddings: {embeddings}")
+    try:
+        logger.info(f"chunks: {chunks[0][:50]}")
+
+        vectorstore = Chroma.from_texts(
+            texts=chunks,
+            embedding=embeddings,
+            collection_name=collection_name,
+            persist_directory=persist_directory,
+        )
+
+        logger.info(f"Created vectorstore for collection: {collection_name}")
+        logger.info(f"vectorstore: {vectorstore}")
+        return vectorstore
+    except Exception as e:
+        logger.error("An error occurred while creating the vectorstore:")
+        traceback.print_exception(type(e), e, e.__traceback__)
+        return None
 
 
 def get_chat_response(
@@ -204,24 +289,41 @@ def get_chat_response(
     ollama: ChatOllama,
 ) -> Optional[str]:
     """Retrieves a chat response based on the user input, resume retriever, and job ad retriever."""
+    logger.info("in get_chat_response")
     logger.info(f"user_input: {user_input}")
     logger.info(f"resume_retriever: {resume_retriever}")
     logger.info(f"job_retriever: {job_retriever}")
     if not user_input or not job_retriever or not resume_retriever:
         return None
 
-    chain = (
-        {
-            "resume_context": resume_retriever,
-            "job_context": job_retriever,
-            "user_input": lambda x: user_input,
-            "question": lambda x: CHAT_QUESTION,
-        }
-        | CHAT_PROMPT
-        | ollama
-        | passthrough  # Simple output parsing
-    )
+    try:
+        chain = create_chain(
+            resume_retriever=resume_retriever,
+            job_retriever=job_retriever,
+            user_input=user_input,
+            prompt=CHAT_PROMPT,
+            ollama=ollama,
+        )
 
-    response = chain.invoke(user_input)
-    logger.info("Chat response created")
-    return response
+        response = chain.invoke(user_input)
+        logger.info("Chat response created")
+        return response
+
+    except Exception as e:
+        logger.error(f"Error in chat response: {e}")
+        raise
+
+    finally:
+        # Clean up chain resources
+        if "chain" in locals():
+            del chain
+
+        # Force cleanup of embeddings after each chat response
+        if hasattr(job_retriever, "vectorstore") and hasattr(
+            job_retriever.vectorstore, "_embeddings"
+        ):
+            job_retriever.vectorstore._embeddings.cleanup()
+        if hasattr(resume_retriever, "vectorstore") and hasattr(
+            resume_retriever.vectorstore, "_embeddings"
+        ):
+            resume_retriever.vectorstore._embeddings.cleanup()

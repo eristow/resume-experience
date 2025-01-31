@@ -93,7 +93,7 @@ def download_tokenizer(base_model, save_directory, logger, missing_files):
         )
 
         logger.info("Saving tokenizer...")
-        tokenizer.save_pretrained(save_directory)
+        tokenizer.save_pretrained(save_directory, from_pt=True)
         logger.info("Tokenizer saved successfully")
 
     except Exception as e:
@@ -118,8 +118,16 @@ def download_model(base_model, save_directory, logger, missing_files):
             f"Downloading model (missing files: {', '.join(missing_files) if missing_files else 'all'})... This may take several minutes."
         )
 
+        quant_config = BitsAndBytesConfig(
+            load_in_4bit=True,
+            bnb_4bit_quant_type="nf4",
+            bnb_4bit_compute_dtype=torch.bfloat16,
+            bnb_4bit_use_double_quant=True,
+        )
+
         model = AutoModelForCausalLM.from_pretrained(
             base_model,
+            # quantization_config=quant_config,
             token=ACCESS_TOKEN,
             device_map="auto",
             low_cpu_mem_usage=True,
@@ -133,7 +141,8 @@ def download_model(base_model, save_directory, logger, missing_files):
         logger.info("Saving model... This may take several minutes.")
         model.save_pretrained(
             save_directory,
-            max_shard_size="1GB",
+            # max_shard_size="1GB",
+            from_pt=True,
             safe_serialization=True,
         )
 

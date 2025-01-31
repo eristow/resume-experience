@@ -15,10 +15,14 @@ class TestHandleChat:
             yield mock
 
     @pytest.fixture
-    def mock_session_state(self):
-        with patch("streamlit.session_state") as mock:
-            mock.app_state = Mock()
-            mock.app_state.chat_history = []
+    def mock_streamlit(self):
+        with patch("components.chatbot.st") as mock:
+
+            class SessionState:
+                chat_history = []
+
+            mock = Mock()
+            mock.session_state = SessionState()
             yield mock
 
     @pytest.fixture
@@ -29,44 +33,50 @@ class TestHandleChat:
         return job_retriever, resume_retriever, ollama
 
     def test_handle_chat_basic_interaction(
-        self, mock_chat_response, mock_session_state, mock_dependencies
+        self, mock_chat_response, mock_streamlit, mock_dependencies
     ):
         job_retriever, resume_retriever, ollama = mock_dependencies
         user_input = "Test question"
 
         with patch("streamlit.write") as mock_write:
-            handle_chat(user_input, job_retriever, resume_retriever, ollama)
+            handle_chat(
+                mock_streamlit, user_input, job_retriever, resume_retriever, ollama
+            )
 
-            assert len(mock_session_state.app_state.chat_history) == 2
-            assert mock_session_state.app_state.chat_history[0] == {
+            print(f"chat_history: {mock_streamlit.session_state.chat_history}")
+
+            assert len(mock_streamlit.session_state.chat_history) == 2
+            assert mock_streamlit.session_state.chat_history[0] == {
                 "role": "User",
                 "content": "Test question",
             }
-            assert mock_session_state.app_state.chat_history[1] == {
+            assert mock_streamlit.session_state.chat_history[1] == {
                 "role": "Assistant",
                 "content": "Test response",
             }
 
     def test_handle_chat_multiple_interactions(
-        self, mock_chat_response, mock_session_state, mock_dependencies
+        self, mock_chat_response, mock_streamlit, mock_dependencies
     ):
         job_retriever, resume_retriever, ollama = mock_dependencies
         inputs = ["First question", "Second question"]
 
         with patch("streamlit.write") as mock_write:
             for user_input in inputs:
-                handle_chat(user_input, job_retriever, resume_retriever, ollama)
+                handle_chat(
+                    mock_streamlit, user_input, job_retriever, resume_retriever, ollama
+                )
 
-            assert len(mock_session_state.app_state.chat_history) == 4
+            assert len(mock_streamlit.session_state.chat_history) == 4
             assert mock_chat_response.call_count == 2
 
     def test_handle_chat_calls_dependencies(
-        self, mock_chat_response, mock_session_state, mock_dependencies
+        self, mock_chat_response, mock_streamlit, mock_dependencies
     ):
         job_retriever, resume_retriever, ollama = mock_dependencies
         user_input = "Test question"
 
-        handle_chat(user_input, job_retriever, resume_retriever, ollama)
+        handle_chat(mock_streamlit, user_input, job_retriever, resume_retriever, ollama)
 
         mock_chat_response.assert_called_once_with(
             user_input, job_retriever, resume_retriever, ollama

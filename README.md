@@ -1,6 +1,6 @@
 # resume-experience
 
-Compare a job description to a resume and extract the number of years of relevant work experience from the resume.
+Compare a job ad to a resume and extract the number of years of relevant work experience from the resume.
 
 
 ## RUN APP WITH DOCKER
@@ -17,13 +17,13 @@ Compare a job description to a resume and extract the number of years of relevan
 - Build the app with Docker Compose:
   
     ```bash
-    docker-compose build
+    docker compose build
     ```
 
 - Start the app with Docker Compose:
 
   ```bash
-  docker-compose up
+  docker compose -p "resume-experience" up
   ```
 
 - Build the Docker image:

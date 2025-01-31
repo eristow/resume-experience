@@ -2,51 +2,25 @@ import atexit
 import os
 import shutil
 import streamlit as st
-from io import BytesIO
-import logging
-from datetime import datetime
-from dotenv import load_dotenv
-import threading
 import uuid
+from io import BytesIO
+from datetime import datetime
+from dateutil.relativedelta import relativedelta
+from dotenv import load_dotenv
 from extract_text import extract_text_from_uploaded_files
 from analyze import analyze_inputs
 import config
-from state_manager import initialize_state, reset_state_analysis, new_ollama_instance
+from state_manager import (
+    reset_state_analysis,
+    new_ollama_instance,
+    save_analysis_results,
+)
 from components.file_upload import render_file_upload
 from components.text_display import render_text_display
 from components.output_experience import render_output_experience
-from components.chatbot import render_chatbot, handle_chat
-
-
-def setup_logging():
-    """Configure logging with a custom fomatter that includes a unique request ID."""
-    logger = logging.getLogger(__name__)
-    logger.setLevel(logging.getLevelName(config.app_config.LOG_LEVEL))
-
-    thread_local = threading.local()
-    thread_local.request_id = str(uuid.uuid4())[:8]
-
-    class RequestIdFilter(logging.Filter):
-        def filter(self, record):
-            record.request_id = getattr(thread_local, "request_id", "")
-            return True
-
-    formatter = logging.Formatter(
-        "%(asctime)s [%(request_id)s] %(levelname)s: %(message)s",
-        datefmt="%Y-%m-%d %H:%M:%S",
-    )
-
-    stream_handler = logging.StreamHandler()
-    stream_handler.setFormatter(formatter)
-
-    request_id_filter = RequestIdFilter()
-    stream_handler.addFilter(request_id_filter)
-
-    logger.handlers.clear()
-
-    logger.addHandler(stream_handler)
-
-    return logger
+from components.chatbot import render_chatbot, handle_chat, cleanup_chat_resources
+from components.job_input import render_job_input
+from logger import setup_logging
 
 
 logger = setup_logging()
@@ -65,16 +39,30 @@ def initialize_app():
     """Initialize the app on first run."""
     if not hasattr(st.session_state, "initialized"):
         load_dotenv()
-        initialize_state(st)
-        app_state = st.session_state.app_state
+        st.session_state.result = ""
+        st.session_state.job_retriever = None
+        st.session_state.resume_retriever = None
+        st.session_state.job_text = ""
+        st.session_state.chat_history = None
+        st.session_state.initialized = False
+        st.session_state.session_id = str(uuid.uuid4())[:8]
+        st.session_state.job_rows = [
+            {"job": None, "start_date": None, "end_date": None, "description": ""}
+        ]
+        st.session_state.job_info = []
+        st.session_state.using_dev_data = False
+        st.session_state.enable_dev_features = config.app_config.ENABLE_DEV_FEATURES
+        print(f"enable_dev_features: {st.session_state.enable_dev_features}")
 
         logger.info("Starting the Resume Experience Analyzer app...")
         os.makedirs(config.app_config.TEMP_DIR, exist_ok=True)
+        # st.session_state.app_state.initialized = True
         st.session_state.initialized = True
 
 
 def cleanup():
     """Clean up resources when the session ends."""
+    cleanup_chat_resources(st)
     if os.path.exists(config.app_config.TEMP_DIR):
         shutil.rmtree(config.app_config.TEMP_DIR)
         logger.info("Closing the Resume Experience Analyzer app...")
@@ -88,75 +76,151 @@ def main():
     """
     Main function for the Resume Experience Analyzer application.
 
-    This function handles the user interface and logic for uploading job descriptions and resumes,
+    This function handles the user interface and logic for uploading job ads and resumes,
     analyzing the inputs, and displaying the results.
     """
     initialize_app()
 
-    app_state = st.session_state.app_state
     ollama = new_ollama_instance()
 
     st.title("Resume Experience Analyzer")
 
     st.write(
-        "This app will compare a job description to a resume and extract the number of years of relevant work experience from the resume."
+        "This app will compare a job ad to a resume and extract the number of years of relevant work experience from the resume."
     )
-    job_file, resume_file = render_file_upload()
 
-    if job_file is None and resume_file is None:
-        st.write(
-            "Please upload a job description and a resume to auto-populate the fields below."
-        )
-    else:
-        app_state.job_text, app_state.resume_text = extract_text_from_uploaded_files(
-            job_file, resume_file, config.app_config.TEMP_DIR
-        )
+    with st.container(border=True):
 
-    render_text_display(app_state.job_text, app_state.resume_text)
+        job_file = render_file_upload()
 
-    if st.button("Analyze"):
+        if job_file is None:
+            st.write("Please upload a job ad to auto-populate the text area below.")
+        else:
+            st.session_state.job_text = extract_text_from_uploaded_files(
+                job_file, config.app_config.TEMP_DIR
+            )
+
+        render_text_display(st.session_state.job_text)
+
+        render_job_input()
+
+    if st.button("Analyze", use_container_width=True):
         start_time = datetime.now()
         reset_state_analysis(st)
 
-        job_text = app_state.job_text
-        resume_text = app_state.resume_text
+        job_info = ""
+
+        # Validate job rows
+
+        valid_jobs = [
+            row
+            for row in st.session_state.job_rows
+            if row["job"]
+            and row["start_date"]
+            and row["end_date"]
+            and row["description"]
+        ]
+
+        # Create job info string
+        job_info = ""
+        job_lengths = []
+
+        for i, data in enumerate(valid_jobs):
+            job_length = relativedelta(data["end_date"], data["start_date"])
+            job_lengths.append(job_length)
+
+            job_info += f"JOB {i + 1} | "
+            job_info += f"{data['job']} | "
+            job_info += f"Length of job: {job_length.years} years, {job_length.months} months, {job_length.days} days | "
+            job_info += f"{data['description']}\n"
+
+        total_job_lengths = None
+        logger.info(f"job_lengths: {job_lengths}")
+        for length in job_lengths:
+            logger.info(f"length: {length}")
+            if total_job_lengths is None:
+                total_job_lengths = length
+            else:
+                total_job_lengths += length
+
+        total_job_info = (
+            f"Total length of jobs: {total_job_lengths.years} years, {total_job_lengths.months} months, {total_job_lengths.days} days | \n"
+            + job_info
+        )
+
+        logger.info(f"total_job_info: {total_job_info}")
 
         with st.spinner("Processing (this can take a few minutes)..."):
-            if not job_text or not resume_text:
-                st.write("Please upload a job description and a resume first.")
+            if not st.session_state.job_text or not total_job_info:
+                st.write("Please upload a job ad and a resume first.")
                 return
 
-            log_texts(job_text, resume_text)
+            log_texts(
+                st.session_state.job_text,
+                total_job_info,
+            )
 
-            result, job_retriever, resume_retriever = analyze_inputs(
-                job_text,
-                resume_text,
+            new_result, new_job_retriever, new_resume_retriever = analyze_inputs(
+                st.session_state.job_text,
+                total_job_info,
                 ollama,
             )
 
-            if isinstance(result, str) and "Failed" in result:
-                st.error(result)
+            if isinstance(new_result, str) and "Failed" in new_result:
+                st.error(new_result)
                 return
 
-            app_state.save_analysis_results(result, job_retriever, resume_retriever)
+            logger.info(f"new_job_retriever: {new_job_retriever}")
+            logger.info(f"new_resume_retriever: {new_resume_retriever}")
+
+            # app_state.save_analysis_results(
+            #     new_result, new_job_retriever, new_resume_retriever
+            # )
+            save_analysis_results(
+                st, new_result, new_job_retriever, new_resume_retriever
+            )
             logger.info(f"Time spent analyzing: {datetime.now() - start_time}")
 
-    render_output_experience(app_state.result)
+    render_output_experience(st.session_state.result)
+
+    # if st.session_state.job_retriever:
+    #     st.write(st.session_state.job_retriever)
+    #     st.write(
+    #         f"job_retriever content: {st.session_state.job_retriever.vectorstore.similarity_search("What is the role?")}"
+    #     )
+
+    # if st.session_state.resume_retriever:
+    #     st.write(st.session_state.resume_retriever)
+    #     st.write(
+    #         f"resume_retriever content: {st.session_state.resume_retriever.vectorstore.similarity_search("What is the name?")}"
+    #     )
 
     user_input = render_chatbot()
 
     if user_input is not None:
         start_time = datetime.now()
-        job_text = app_state.job_text
-        resume_text = app_state.resume_text
-        job_retriever = app_state.job_retriever
-        resume_retriever = app_state.resume_retriever
+        # job_text = st.session_state.job_text
+        # resume_text = st.session_state.resume_text
+        # job_retriever = st.session_state.job_retriever
+        # resume_retriever = st.session_state.resume_retriever
 
-        if (job_text == "") or (resume_text == ""):
-            st.write("Please upload and analyze a job description and a resume first.")
+        if (
+            (st.session_state.job_text == "")
+            or (st.session_state.job_retriever == None)
+            or (st.session_state.resume_retriever == None)
+        ):
+            st.write(
+                "Please input the job ad, the job experience from the resume, and perform an analysis first."
+            )
             return
 
-        handle_chat(user_input, job_retriever, resume_retriever, ollama)
+        handle_chat(
+            st,
+            user_input,
+            st.session_state.job_retriever,
+            st.session_state.resume_retriever,
+            ollama,
+        )
 
         logger.info(f"Time spent creating chat response: {datetime.now() - start_time}")
 

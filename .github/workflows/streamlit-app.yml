@@ -5,12 +5,10 @@ on:
     branches: [ "main", "feature/**" ]
     paths:
       - 'src/**'
-      - 'requirements.txt'
   pull_request:
     branches: [ "main" ]
     paths:
       - 'src/**'
-      - 'requirements.txt'
 
 jobs:
   build:
@@ -28,7 +26,7 @@ jobs:
       run: |
         python -m venv venv
         source venv/bin/activate
-        pip install -r requirements.txt
+        pip install -r src/requirements.txt
     
     - name: Install shell dependencies
       run: |

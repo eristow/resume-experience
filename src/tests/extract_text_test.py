@@ -17,23 +17,15 @@ class TestExtractTextFromUploadedFiles:
 
     def test_extract_text_from_uploaded_files_valid(self):
         job_file = Mock(spec=UploadedFile)
-        resume_file = Mock(spec=UploadedFile)
         job_file.name = "job.pdf"
-        resume_file.name = "resume.pdf"
 
         with patch("extract_text.extract_text", return_value="Sample text"):
-            job_text, resume_text = extract_text_from_uploaded_files(
-                job_file, resume_file, "./tests/temp/"
-            )
+            job_text = extract_text_from_uploaded_files(job_file, "./tests/temp/")
             assert job_text == "Sample text"
-            assert resume_text == "Sample text"
 
     def test_extract_text_from_uploaded_files_none_files(self):
-        job_text, resume_text = extract_text_from_uploaded_files(
-            None, None, "./tests/temp/"
-        )
+        job_text = extract_text_from_uploaded_files(None, "./tests/temp/")
         assert job_text is None
-        assert resume_text is None
 
 
 class TestExtractText:

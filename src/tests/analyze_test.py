@@ -7,6 +7,7 @@ from analyze import (
 import pytest
 from unittest.mock import Mock, patch, call
 from langchain_community.embeddings import FakeEmbeddings
+import streamlit as st
 
 
 def mock_chat_ollama(input_data):
@@ -29,6 +30,10 @@ class TestAnalyzeInputs:
     @pytest.fixture
     def mock_embeddings(self):
         mock_emb = Mock(name="MockedEmbeddings")
+        mock_tokenizer = Mock(name="MockTokenizer")
+
+        mock_tokenizer.encode = Mock(return_value="abcdefg")
+        mock_emb.get_tokenizer = Mock(return_value=mock_tokenizer)
         return mock_emb
 
     @pytest.fixture
@@ -58,6 +63,13 @@ class TestAnalyzeInputs:
             mock_instance.encode.return_value = [1, 2, 3]
             mock_tokenizer.from_pretrained.return_value = mock_instance
             yield mock_tokenizer
+
+    @pytest.fixture(autouse=True)
+    def mock_session_state(self):
+        with patch("streamlit.session_state") as mock:
+            mock.app_state = Mock()
+            st.session_state.session_id = "1234"
+            yield mock
 
     def test_analyze_inputs_valid(
         self,
@@ -141,7 +153,10 @@ class TestAnalyzeInputs:
         assert mock_process_text.call_count == 2
 
         mock_process_text.assert_has_calls(
-            [call(job_text, mock_embeddings), call(resume_text, mock_embeddings)],
+            [
+                call(job_text, mock_embeddings, collection_name="job_1234"),
+                call(resume_text, mock_embeddings, collection_name="resume_1234"),
+            ],
             any_order=True,
         )
 

@@ -1,7 +1,7 @@
 from datetime import datetime
 import logging
 from streamlit.runtime.uploaded_file_manager import UploadedFile
-from typing import Optional, Tuple
+from typing import Optional
 import os
 import docx
 import pdf2image
@@ -9,28 +9,28 @@ import pytesseract
 from pytesseract import Output
 import shutil
 import config
+import re
+from logger import setup_logging
 
-logger = logging.getLogger(__name__)
+logger = setup_logging()
 
 
 def extract_text_from_uploaded_files(
     job_file: UploadedFile,
-    resume_file: UploadedFile,
     temp_dir: str,
-) -> Tuple[Optional[str], Optional[str]]:
-    """Extracts text from uploaded job and resume files."""
-    if not job_file or not resume_file:
-        logger.error("No job or resume file provided")
-        return None, None
+) -> Optional[str]:
+    """Extracts text from uploaded job files."""
+    if not job_file:
+        logger.error("No job file provided")
+        return None
 
     start_time = datetime.now()
 
     job_text = extract_text("job", job_file, temp_dir)
-    resume_text = extract_text("resume", resume_file, temp_dir)
 
     logger.info(f"Time spent extracting text: {datetime.now() - start_time}")
 
-    return job_text, resume_text
+    return re.sub("description", "", job_text, flags=re.IGNORECASE)
 
 
 def get_file_extension(file: UploadedFile) -> Optional[str]:
@@ -100,7 +100,7 @@ def extract_text_from_file(
         logger.error(f"An error occurred while extracting text: {e}")
         return None
 
-    return None if not text else text
+    return text if text else None
 
 
 # Doesn't work if using uploaded_file. Only with file_path
