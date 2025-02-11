@@ -24,6 +24,7 @@ model_token.py
 
 # Pytest
 .cache/
+.pytest_cache/
 
 # Environment variables
 .env
@@ -44,3 +45,4 @@ temp_text.txt
 temp_dir/
 src/temp_dir/
 **/.streamlit/secrets.toml
+TODO.md

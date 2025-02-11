@@ -52,6 +52,7 @@ def initialize_app():
         st.session_state.job_info = []
         st.session_state.using_dev_data = False
         st.session_state.enable_dev_features = config.app_config.ENABLE_DEV_FEATURES
+        st.session_state.analysis_confirmed = False
         print(f"init: enable_dev_features: {st.session_state.enable_dev_features}")
 
         logger.info("Starting the Resume Experience Analyzer app...")
@@ -69,6 +70,23 @@ def cleanup():
 
 
 atexit.register(lambda: shutil.rmtree(config.app_config.TEMP_DIR, ignore_errors=True))
+
+
+@st.dialog("Confirm Analysis Start")
+def confirm_start_analysis():
+    st.error(
+        "Running analysis will clear your current chatbot history! Are you sure you want to begin an analysis?"
+    )
+    col1, col2, col3 = st.columns([2, 1, 1])
+
+    with col2:
+        if st.button("Cancel"):
+            st.session_state.analysis_confirmed = False
+            st.rerun()
+
+    with col3:
+        if st.button("Confirm", type="primary"):
+            st.session_state.analysis_confirmed = True
 
 
 # Streamlit UI components
@@ -105,13 +123,14 @@ def main():
         render_job_input()
 
     if st.button("Analyze", use_container_width=True):
+        confirm_start_analysis()
+
+    if st.session_state.analysis_confirmed:
         start_time = datetime.now()
-        reset_state_analysis(st)
 
         job_info = ""
 
         # Validate job rows
-
         valid_jobs = [
             row
             for row in st.session_state.job_rows

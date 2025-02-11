@@ -21,11 +21,11 @@ def save_analysis_results(
 
 def reset_state_analysis(st) -> None:
     """Reset all session state variables related to analysis"""
-    # TODO: is resetting chat history on new analysis desired behavior? Should we inform the user before hand?
     st.session_state.chat_history = []
     st.session_state.result = ""
     st.session_state.job_retriever = None
     st.session_state.resume_retriever = None
+    st.session_state.analysis_confirmed = False
 
 
 def new_ollama_instance() -> ChatOllama:
