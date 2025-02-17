@@ -17,6 +17,8 @@ class TestRenderJobInput:
         ]
         at.session_state.using_dev_data = False
         at.session_state.enable_dev_features = False
+        at.session_state.analysis_confirmed = False
+        at.session_state.extracting_text = False
         at.run()
 
         assert not at.exception
