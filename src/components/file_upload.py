@@ -9,9 +9,17 @@ def render_file_upload() -> Optional[UploadedFile]:
 
     with st.form("input_file_form", border=False):
         job_file = st.file_uploader(
-            "Upload Job Ad", type=["pdf", "doc", "docx"], key="job_file"
+            "Upload Job Ad",
+            type=["pdf", "doc", "docx"],
+            key="job_file",
+            disabled=st.session_state.analysis_confirmed
+            or st.session_state.extracting_text,
         )
 
-        submit = st.form_submit_button("Extract Text")
+        submit = st.form_submit_button(
+            "Extract Text",
+            disabled=st.session_state.analysis_confirmed
+            or st.session_state.extracting_text,
+        )
 
     return job_file if submit else None

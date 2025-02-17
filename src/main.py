@@ -52,8 +52,11 @@ def initialize_app():
         st.session_state.job_info = []
         st.session_state.using_dev_data = False
         st.session_state.enable_dev_features = config.app_config.ENABLE_DEV_FEATURES
+        logger.info(
+            f"init: enable_dev_features: {st.session_state.enable_dev_features}"
+        )
+        st.session_state.extracting_text = False
         st.session_state.analysis_confirmed = False
-        print(f"init: enable_dev_features: {st.session_state.enable_dev_features}")
 
         logger.info("Starting the Resume Experience Analyzer app...")
         os.makedirs(config.app_config.TEMP_DIR, exist_ok=True)
@@ -87,6 +90,7 @@ def confirm_start_analysis():
     with col3:
         if st.button("Confirm", type="primary"):
             st.session_state.analysis_confirmed = True
+            st.rerun()
 
 
 # Streamlit UI components
@@ -103,8 +107,11 @@ def main():
 
     st.title("Resume Experience Analyzer")
 
-    st.write(
-        "This app will compare a job ad to a resume and extract the number of years of relevant work experience from the resume."
+    # st.write(
+    #     "This app will compare a job ad to a resume and extract the number of years of relevant work experience from the resume."
+    # )
+    st.info(
+        "Please do not interact with the app while it is processing the analysis or chatbot."
     )
 
     with st.container(border=True):
@@ -114,15 +121,22 @@ def main():
         if job_file is None:
             st.write("Please upload a job ad to auto-populate the text area below.")
         else:
+            st.session_state.extracting_text = True
             st.session_state.job_text = extract_text_from_uploaded_files(
                 job_file, config.app_config.TEMP_DIR
             )
+            st.session_state.extracting_text = False
 
         render_text_display(st.session_state.job_text)
 
         render_job_input()
 
-    if st.button("Analyze", use_container_width=True):
+    if st.button(
+        "Analyze",
+        use_container_width=True,
+        disabled=st.session_state.analysis_confirmed
+        or st.session_state.extracting_text,
+    ):
         confirm_start_analysis()
 
     if st.session_state.analysis_confirmed:
@@ -134,10 +148,11 @@ def main():
         valid_jobs = [
             row
             for row in st.session_state.job_rows
-            if row["job"]
-            and row["start_date"]
-            and row["end_date"]
-            and row["description"]
+            if "job" in row
+            and "start_date" in row
+            and "end_date" in row
+            and "is_part_time" in row
+            and "description" in row
         ]
 
         # Create job info string
@@ -146,6 +161,8 @@ def main():
 
         for i, data in enumerate(valid_jobs):
             job_length = relativedelta(data["end_date"], data["start_date"])
+            if data["is_part_time"]:
+                job_length = job_length / 2
             job_lengths.append(job_length)
 
             job_info += f"JOB {i + 1} | "

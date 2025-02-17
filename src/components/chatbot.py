@@ -24,8 +24,16 @@ def cleanup_chat_resources(st) -> None:
 
 def render_chatbot():
     st.subheader("Chatbot Feature")
-    user_input = st.text_input("Ask a question:")
-    submit = st.button("Submit Query")
+    user_input = st.text_input(
+        "Ask a question:",
+        disabled=st.session_state.analysis_confirmed
+        or st.session_state.extracting_text,
+    )
+    submit = st.button(
+        "Submit Query",
+        disabled=st.session_state.analysis_confirmed
+        or st.session_state.extracting_text,
+    )
 
     # Clean up when switching away from chat
     if (
