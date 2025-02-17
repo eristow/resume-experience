@@ -11,12 +11,16 @@ def setup_logging(session_id: str = None) -> logging.Logger:
     logger.setLevel(logging.getLevelName(config.app_config.LOG_LEVEL))
 
     thread_local = threading.local()
-    if st.session_state.get("request_id"):
-        thread_local.request_id = st.session_state.request_id
+    if st.session_state.get("session_id"):
+        # print(f"session_state.session_id: {st.session_state.session_id}")
+        thread_local.request_id = st.session_state.session_id
     elif session_id:
+        # print(f"session_id: {session_id}")
         thread_local.request_id = session_id
     else:
+        # print("no session_id")
         thread_local.request_id = str(uuid.uuid4())[:8]
+    # print(f"request_id: {thread_local.request_id}")
 
     class RequestIdFilter(logging.Filter):
         def filter(self, record):

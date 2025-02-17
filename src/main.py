@@ -11,7 +11,6 @@ from extract_text import extract_text_from_uploaded_files
 from analyze import analyze_inputs
 import config
 from state_manager import (
-    reset_state_analysis,
     new_ollama_instance,
     save_analysis_results,
 )
@@ -22,10 +21,7 @@ from components.chatbot import render_chatbot, handle_chat, cleanup_chat_resourc
 from components.job_input import render_job_input
 from logger import setup_logging
 
-
 SESSION_ID = str(uuid.uuid4())[:8]
-st.session_state.session_id = SESSION_ID
-# print(f"session_id: {st.session_state.session_id}")
 logger = setup_logging(SESSION_ID)
 
 
@@ -42,6 +38,9 @@ def initialize_app():
     """Initialize the app on first run."""
     if not hasattr(st.session_state, "initialized"):
         load_dotenv()
+        st.session_state.session_id = SESSION_ID
+        print(f"session_id: {st.session_state.session_id}")
+
         st.session_state.result = ""
         st.session_state.job_retriever = None
         st.session_state.resume_retriever = None
@@ -164,7 +163,16 @@ def main():
         for i, data in enumerate(valid_jobs):
             job_length = relativedelta(data["end_date"], data["start_date"])
             if data["is_part_time"]:
-                job_length = job_length / 2
+                total_days = (
+                    job_length.years * 365 + job_length.months * 30 + job_length.days
+                )
+                half_days = total_days // 2
+
+                years = half_days // 365
+                remaining_days = half_days % 365
+                months = remaining_days // 30
+                days = remaining_days % 30
+                job_length = relativedelta(years=years, months=months, days=days)
             job_lengths.append(job_length)
 
             job_info += f"JOB {i + 1} | "
@@ -218,6 +226,7 @@ def main():
                 st, new_result, new_job_retriever, new_resume_retriever
             )
             logger.info(f"Time spent analyzing: {datetime.now() - start_time}")
+            st.rerun()
 
     render_output_experience(st.session_state.result)
 

@@ -16,6 +16,7 @@ def save_analysis_results(
     st.session_state.result = result.content
     st.session_state.job_retriever = job_retriever
     st.session_state.resume_retriever = resume_retriever
+    st.session_state.analysis_confirmed = False
     logger.info(f"result: {result.content}")
 
 
