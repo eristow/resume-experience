@@ -10,7 +10,9 @@ from pytesseract import Output
 import shutil
 import config
 import re
+import streamlit as st
 from logger import setup_logging
+
 
 logger = setup_logging()
 

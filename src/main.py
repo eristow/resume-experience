@@ -23,7 +23,10 @@ from components.job_input import render_job_input
 from logger import setup_logging
 
 
-logger = setup_logging()
+SESSION_ID = str(uuid.uuid4())[:8]
+st.session_state.session_id = SESSION_ID
+# print(f"session_id: {st.session_state.session_id}")
+logger = setup_logging(SESSION_ID)
 
 
 def log_texts(job_text: str, resume_text: str) -> None:
@@ -45,7 +48,6 @@ def initialize_app():
         st.session_state.job_text = ""
         st.session_state.chat_history = None
         st.session_state.initialized = False
-        st.session_state.session_id = str(uuid.uuid4())[:8]
         st.session_state.job_rows = [
             {"job": None, "start_date": None, "end_date": None, "description": ""}
         ]
@@ -111,7 +113,7 @@ def main():
     #     "This app will compare a job ad to a resume and extract the number of years of relevant work experience from the resume."
     # )
     st.info(
-        "Please do not interact with the app while it is processing the analysis or chatbot."
+        "Please do not interact with the app while it is processing the extract text, analysis, or chatbot."
     )
 
     with st.container(border=True):
