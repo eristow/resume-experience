@@ -13,7 +13,15 @@ Compare a job ad to a resume and extract the number of years of relevant work ex
 
   - https://docs.docker.com/compose/install/
 
-### RUNNING THE APP
+- A Hugging Face account with an access token.
+
+- To download the model from HuggingFace into the Streamlit Docker container using `src/scripts/docker_download_model.py`:
+  - Ensure the file `src/scripts/model_token.py` exists and has the following content:
+  ```python
+  ACCESS_TOKEN = "<YOUR_HUGGING_FACE_ACCESS_TOKEN>"
+  ```
+
+### RUNNING THE APP WITH DOCKER COMPOSE
 - Build the app with Docker Compose:
   
     ```bash
@@ -26,6 +34,7 @@ Compare a job ad to a resume and extract the number of years of relevant work ex
   docker compose -p "resume-experience" up
   ```
 
+### RUNNING THE APP WITH ONLY DOCKER
 - Build the Docker image:
 
   ```bash
