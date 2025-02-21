@@ -24,6 +24,7 @@ model_token.py
 
 # Pytest
 .cache/
+.pytest_cache/
 
 # Environment variables
 .env
@@ -43,3 +44,4 @@ cuda-repo-ubuntu2404-12-5-local_12.5.1-555.42.06-1_amd64.deb
 temp_text.txt
 temp_dir/
 src/temp_dir/
+**/.streamlit/secrets.toml

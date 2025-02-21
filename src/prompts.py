@@ -1,7 +1,6 @@
 from datetime import datetime
 from langchain.prompts import ChatPromptTemplate
 
-# TODO: add the idea of half-relevancy into the prompt?
 ANALYSIS_QUESTION = f"""
 **Instructions for Formatting Output:**
 - **Overall Experience:** Take length from "Total length of jobs:" section.
@@ -52,7 +51,7 @@ CHAT_PROMPT = ChatPromptTemplate.from_template(
     # User Input: {user_input}
     # Question: {question}"""
     template="""
-Based on the Job Ad {job_context}, and the provided job info of the candidate {resume_context}, answer the user-provided question. If the output contains years of experience, they should be in years/months/days.
+Based on the Job Ad {job_context}, and the provided job info of the candidate {resume_context}, answer the user-provided question. If the output contains years of experience, they should be in years/months/days. The question is: {user_input}
     """
 )
 

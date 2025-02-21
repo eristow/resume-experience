@@ -33,6 +33,7 @@ class TestStateManager:
         mock_st.session_state.result = "test result"
         mock_st.session_state.job_retriever = MagicMock()
         mock_st.session_state.resume_retriever = MagicMock()
+        mock_st.session_state.analysis_confirmed = MagicMock()
 
         reset_state_analysis(mock_st)
 
@@ -40,6 +41,7 @@ class TestStateManager:
         assert mock_st.session_state.result == ""
         assert mock_st.session_state.job_retriever is None
         assert mock_st.session_state.resume_retriever is None
+        assert mock_st.session_state.analysis_confirmed is False
 
     @patch("state_manager.ChatOllama")
     def test_new_ollama_instance(self, mock_chat_ollama):

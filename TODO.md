@@ -1,10 +1,9 @@
 ## TODO:
-- [ ] Use same uuid in `context_manager` and `logging`
+- [ ] BUG: sometimes logging ID is gone
+  - [ ] On simultaneous runs
+  - [ ] During custom_embeddings classes
 
-- [ ] Clean up code to not call `st.session_state` as much
-  - Example: start of `user_input` to chatbot in `main.py`
-
- [ ] Split up the tuned Mistral model from the Streamlit container
+- [ ] Split up the tuned Mistral model from the Streamlit container
   - 3 total containers: Streamlit, Ollama, Mistral
   - Streamlit will have to make API calls to Mistral
   - Mistral container will have a light API wrapper around the model
@@ -15,7 +14,7 @@
 
 ## EXTRA:
 - [ ] Add actual concurrency for analysis?
-  - Is this needed?
+  - Is this needed instead of locking?
 
 - [ ] Add a startup process for the Streamlit container so don't have to do an initial request to warm up the model
   - **Since analyze is now locked and will only perform one at a time, we won't need this.**
@@ -23,6 +22,16 @@
 
 
 ## DONE:
+- [x] Re-enable inputs after analysis run
+- [x] Look into part time date calculation
+- [x] Fix logging id to have a single session ID instead of a new one on each user interaction
+- [x] Use same uuid in `context_manager` and `logging`
+- [x] Disable all inputs if currently analyzing
+- [x] Part-time job toggle
+  - [x] Divide duration before feeding it into the LLM
+- [x] Add confirmation dialog to Analyze button
+  - [x] "This will delete chatbot history. Continue?"
+  - [x] Maybe don't delete chat history if failed to acquire analyze lock
 - [x] Fix tests, add new ones
   - [x] Comment out auto-resume buttons
   - [x] Then make a PR

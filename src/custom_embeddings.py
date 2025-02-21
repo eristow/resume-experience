@@ -11,14 +11,13 @@ from logger import setup_logging
 import uuid
 import threading
 
-logger = setup_logging()
-
 
 class ModelManager:
     """
     Singleton class to manage model resources across sessions
     """
 
+    logger = setup_logging()
     _instance = None
     _lock = threading.Lock()
 
@@ -39,18 +38,20 @@ class CustomEmbeddings(Embeddings):
     CustomEmbeddings class for generating embeddings using a pre-trained language model.
     """
 
+    logger = setup_logging()
+
     def __init__(self, model_name):
         self.model_name = model_name
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         # self._model = None
         # self._tokenizer = None
         self.manager = ModelManager()
-        logger.info(f"Created new CustomEmbeddings instance")
+        self.logger.info(f"Created new CustomEmbeddings instance")
 
     def get_model(self):
         """Get or create model instance"""
         # if self._model is None:
-        #     logger.info(f"Loading model...")
+        #     self.logger.info(f"Loading model...")
         #     quant_config = BitsAndBytesConfig(
         #         load_in_4bit=True,
         #         bnb_4bit_quant_type="nf4",
@@ -67,12 +68,12 @@ class CustomEmbeddings(Embeddings):
         #         memory_allocated = torch.cuda.memory_allocated(0)
         #         available_memory = total_memory - memory_allocated
 
-        #         logger.info(f"GPU Total Memory: {total_memory / 1024**2:.2f}MB")
-        #         logger.info(f"GPU Memory Allocated: {memory_allocated / 1024**2:.2f}MB")
-        #         logger.info(f"GPU Available Memory: {available_memory / 1024**2:.2f}MB")
+        #         self.logger.info(f"GPU Total Memory: {total_memory / 1024**2:.2f}MB")
+        #         self.logger.info(f"GPU Memory Allocated: {memory_allocated / 1024**2:.2f}MB")
+        #         self.logger.info(f"GPU Available Memory: {available_memory / 1024**2:.2f}MB")
 
         #         if available_memory < 6 * 1024**3:
-        #             logger.info("Limited GPU memory available, using CPU offload")
+        #             self.logger.info("Limited GPU memory available, using CPU offload")
         #             device_map = {
         #                 "transformer.word_embeddings": 0,
         #                 "transformer.h": "cpu",
@@ -81,7 +82,7 @@ class CustomEmbeddings(Embeddings):
         #             }
         #         else:
         #             device_map = "auto"
-        #             logger.info(
+        #             self.logger.info(
         #                 "Sufficient GPU memory available, using auto device map"
         #             )
 
@@ -97,11 +98,11 @@ class CustomEmbeddings(Embeddings):
 
         #         # Verify model device placement
         #         # for name, param in self._model.named_parameters():
-        #         #     logger.info(f"Parameter {name} is on device: {param.device}")
+        #         #     self.logger.info(f"Parameter {name} is on device: {param.device}")
 
         #     except Exception as e:
-        #         logger.error(f"Error loading model: {e}")
-        #         logger.info("Falling back to CPU-only mode")
+        #         self.logger.error(f"Error loading model: {e}")
+        #         self.logger.info("Falling back to CPU-only mode")
         #         self._model = AutoModel.from_pretrained(
         #             self.model_name,
         #             device_map="cpu",
@@ -114,7 +115,7 @@ class CustomEmbeddings(Embeddings):
 
         with self.manager.model_lock:
             if self.manager.model is None:
-                logger.info(f"Loading model...")
+                self.logger.info(f"Loading model...")
                 try:
                     if torch.cuda.is_available():
                         torch.cuda.empty_cache()
@@ -123,11 +124,13 @@ class CustomEmbeddings(Embeddings):
                         memory_allocated = torch.cuda.memory_allocated(0)
                         available_memory = total_memory - memory_allocated
 
-                        logger.info(f"GPU Total Memory: {total_memory / 1024**2:.2f}MB")
-                        logger.info(
+                        self.logger.info(
+                            f"GPU Total Memory: {total_memory / 1024**2:.2f}MB"
+                        )
+                        self.logger.info(
                             f"GPU Memory Allocated: {memory_allocated / 1024**2:.2f}MB"
                         )
-                        logger.info(
+                        self.logger.info(
                             f"GPU Available Memory: {available_memory / 1024**2:.2f}MB"
                         )
 
@@ -142,10 +145,12 @@ class CustomEmbeddings(Embeddings):
                     if (
                         torch.cuda.is_available() and available_memory > 6 * 1024**3
                     ):  # If more than 6GB available
-                        logger.info("Using full GPU acceleration")
+                        self.logger.info("Using full GPU acceleration")
                         device_map = "auto"
                     else:
-                        logger.info("Using partial GPU acceleration with CPU offload")
+                        self.logger.info(
+                            "Using partial GPU acceleration with CPU offload"
+                        )
                         device_map = {
                             "transformer.word_embeddings": 0,
                             "transformer.h": ["0"] * 8
@@ -164,8 +169,8 @@ class CustomEmbeddings(Embeddings):
                     self.manager.model.eval()
 
                 except Exception as e:
-                    logger.error(f"Error loading model with GPU: {e}")
-                    logger.info("Falling back to CPU-only mode")
+                    self.logger.error(f"Error loading model with GPU: {e}")
+                    self.logger.info("Falling back to CPU-only mode")
                     self.manager.model = AutoModel.from_pretrained(
                         self.model_name,
                         device_map="cpu",
@@ -179,14 +184,14 @@ class CustomEmbeddings(Embeddings):
 
     def get_tokenizer(self):
         # if self._tokenizer is None:
-        #     logger.info(f"Loading tokenizer...")
+        #     self.logger.info(f"Loading tokenizer...")
         #     self._tokenizer = AutoTokenizer.from_pretrained(self.model_name)
         #     self._tokenizer.pad_token = self._tokenizer.eos_token
         # return self._tokenizer
 
         with self.manager.model_lock:
             if self.manager.tokenizer is None:
-                logger.info(f"Loading tokenizer...")
+                self.logger.info(f"Loading tokenizer...")
                 self.manager.tokenizer = AutoTokenizer.from_pretrained(self.model_name)
                 self.manager.tokenizer.pad_token = self.manager.tokenizer.eos_token
             return self.manager.tokenizer
@@ -198,7 +203,7 @@ class CustomEmbeddings(Embeddings):
         # model = self.get_model()
         # tokenizer = self.get_tokenizer()
 
-        # logger.info(f"Embeddings processing input: {inputs[:50]}...")
+        # self.logger.info(f"Embeddings processing input: {inputs[:50]}...")
 
         # tokens = tokenizer(
         #     inputs,
@@ -212,7 +217,7 @@ class CustomEmbeddings(Embeddings):
         # model_param = next(model.parameters())
         # device = model_param.device
         # dtype = model_param.dtype
-        # logger.info(f"Model is on device {device} with dtype {dtype}")
+        # self.logger.info(f"Model is on device {device} with dtype {dtype}")
 
         # # Convert tokens to the correct dtype
         # processed_tokens = {
@@ -229,7 +234,7 @@ class CustomEmbeddings(Embeddings):
         #     return embeddings.cpu().numpy().flatten().tolist()
 
         # except RuntimeError as e:
-        #     logger.error(f"Runtime error during embedding: {e}")
+        #     self.logger.error(f"Runtime error during embedding: {e}")
         #     # Fallback to CPU with float32
         #     model.cpu()
         #     processed_tokens = {
@@ -247,7 +252,7 @@ class CustomEmbeddings(Embeddings):
             model = self.get_model()
             tokenizer = self.get_tokenizer()
 
-            logger.info(f"Embeddings processing input: {inputs[:50]}...")
+            self.logger.info(f"Embeddings processing input: {inputs[:50]}...")
 
             tokens = tokenizer(
                 inputs,
@@ -261,7 +266,7 @@ class CustomEmbeddings(Embeddings):
             model_param = next(model.parameters())
             device = model_param.device
             dtype = model_param.dtype
-            logger.info(f"Model is on device {device} with dtype {dtype}")
+            self.logger.info(f"Model is on device {device} with dtype {dtype}")
 
             # Process on the same device as the model
             processed_tokens = {
@@ -283,7 +288,7 @@ class CustomEmbeddings(Embeddings):
                     return embeddings.cpu().numpy().flatten().tolist()
 
             except RuntimeError as e:
-                logger.error(f"Runtime error during embedding: {e}")
+                self.logger.error(f"Runtime error during embedding: {e}")
                 # Fallback to CPU if GPU runs out of memory
                 model.cpu()
                 processed_tokens = {
@@ -303,7 +308,7 @@ class CustomEmbeddings(Embeddings):
 
         for i in range(0, len(texts), batch_size):
             batch = texts[i : i + batch_size]
-            logger.info(f"Embeddings processing batch {i//batch_size + 1}")
+            self.logger.info(f"Embeddings processing batch {i//batch_size + 1}")
             batch_embeddings = [self.embed_func(text) for text in batch]
             embeddings.extend(batch_embeddings)
 
@@ -325,18 +330,18 @@ class CustomEmbeddings(Embeddings):
         #         if torch.cuda.is_available():
         #             torch.cuda.empty_cache()
         #     except Exception as e:
-        #         logger.error(f"Error during model cleanup: {e}")
+        #         self.logger.error(f"Error during model cleanup: {e}")
         # if self._tokenizer is not None:
         #     try:
         #         del self._tokenizer
         #         self._tokenizer = None
         #     except Exception as e:
-        #         logger.error(f"Error during tokenizer cleanup: {e}")
-        # logger.info("Cleaned up model and tokenizer resources")
+        #         self.logger.error(f"Error during tokenizer cleanup: {e}")
+        # self.logger.info("Cleaned up model and tokenizer resources")
 
         with self.manager.model_lock:
             self.manager.use_count -= 1
-            logger.info(f"Decreased use count to {self.manager.use_count}")
+            self.logger.info(f"Decreased use count to {self.manager.use_count}")
             if self.manager.use_count <= 0:
                 if self.manager.model is not None:
                     try:
@@ -346,20 +351,20 @@ class CustomEmbeddings(Embeddings):
 
                         if torch.cuda.is_available():
                             torch.cuda.empty_cache()
-                            logger.info("Cleared CUDA cache")
+                            self.logger.info("Cleared CUDA cache")
 
                     except Exception as e:
-                        logger.error(f"Error during model cleanup: {e}")
+                        self.logger.error(f"Error during model cleanup: {e}")
 
                 if self.manager.tokenizer is not None:
                     try:
                         del self.manager.tokenizer
                         self.manager.tokenizer = None
                     except Exception as e:
-                        logger.error(f"Error during tokenizer cleanup: {e}")
+                        self.logger.error(f"Error during tokenizer cleanup: {e}")
 
                 self.manager.use_count = 0
-                logger.info("Cleaned up model and tokenizer resources")
+                self.logger.info("Cleaned up model and tokenizer resources")
 
     def __del__(self):
         """Destructor to ensure cleanup"""

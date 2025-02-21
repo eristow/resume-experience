@@ -11,7 +11,6 @@ from extract_text import extract_text_from_uploaded_files
 from analyze import analyze_inputs
 import config
 from state_manager import (
-    reset_state_analysis,
     new_ollama_instance,
     save_analysis_results,
 )
@@ -22,8 +21,8 @@ from components.chatbot import render_chatbot, handle_chat, cleanup_chat_resourc
 from components.job_input import render_job_input
 from logger import setup_logging
 
-
-logger = setup_logging()
+SESSION_ID = str(uuid.uuid4())[:8]
+logger = setup_logging(SESSION_ID)
 
 
 def log_texts(job_text: str, resume_text: str) -> None:
@@ -39,20 +38,26 @@ def initialize_app():
     """Initialize the app on first run."""
     if not hasattr(st.session_state, "initialized"):
         load_dotenv()
+        st.session_state.session_id = SESSION_ID
+        print(f"session_id: {st.session_state.session_id}")
+
         st.session_state.result = ""
         st.session_state.job_retriever = None
         st.session_state.resume_retriever = None
         st.session_state.job_text = ""
         st.session_state.chat_history = None
         st.session_state.initialized = False
-        st.session_state.session_id = str(uuid.uuid4())[:8]
         st.session_state.job_rows = [
             {"job": None, "start_date": None, "end_date": None, "description": ""}
         ]
         st.session_state.job_info = []
         st.session_state.using_dev_data = False
         st.session_state.enable_dev_features = config.app_config.ENABLE_DEV_FEATURES
-        print(f"enable_dev_features: {st.session_state.enable_dev_features}")
+        logger.info(
+            f"init: enable_dev_features: {st.session_state.enable_dev_features}"
+        )
+        st.session_state.extracting_text = False
+        st.session_state.analysis_confirmed = False
 
         logger.info("Starting the Resume Experience Analyzer app...")
         os.makedirs(config.app_config.TEMP_DIR, exist_ok=True)
@@ -71,6 +76,24 @@ def cleanup():
 atexit.register(lambda: shutil.rmtree(config.app_config.TEMP_DIR, ignore_errors=True))
 
 
+@st.dialog("Confirm Analysis Start")
+def confirm_start_analysis():
+    st.error(
+        "Running analysis will clear your current chatbot history! Are you sure you want to begin an analysis?"
+    )
+    col1, col2, col3 = st.columns([2, 1, 1])
+
+    with col2:
+        if st.button("Cancel"):
+            st.session_state.analysis_confirmed = False
+            st.rerun()
+
+    with col3:
+        if st.button("Confirm", type="primary"):
+            st.session_state.analysis_confirmed = True
+            st.rerun()
+
+
 # Streamlit UI components
 def main():
     """
@@ -85,8 +108,11 @@ def main():
 
     st.title("Resume Experience Analyzer")
 
-    st.write(
-        "This app will compare a job ad to a resume and extract the number of years of relevant work experience from the resume."
+    # st.write(
+    #     "This app will compare a job ad to a resume and extract the number of years of relevant work experience from the resume."
+    # )
+    st.info(
+        "Please do not interact with the app while it is processing the extract text, analysis, or chatbot."
     )
 
     with st.container(border=True):
@@ -96,29 +122,38 @@ def main():
         if job_file is None:
             st.write("Please upload a job ad to auto-populate the text area below.")
         else:
+            st.session_state.extracting_text = True
             st.session_state.job_text = extract_text_from_uploaded_files(
                 job_file, config.app_config.TEMP_DIR
             )
+            st.session_state.extracting_text = False
 
         render_text_display(st.session_state.job_text)
 
         render_job_input()
 
-    if st.button("Analyze", use_container_width=True):
+    if st.button(
+        "Analyze",
+        use_container_width=True,
+        disabled=st.session_state.analysis_confirmed
+        or st.session_state.extracting_text,
+    ):
+        confirm_start_analysis()
+
+    if st.session_state.analysis_confirmed:
         start_time = datetime.now()
-        reset_state_analysis(st)
 
         job_info = ""
 
         # Validate job rows
-
         valid_jobs = [
             row
             for row in st.session_state.job_rows
-            if row["job"]
-            and row["start_date"]
-            and row["end_date"]
-            and row["description"]
+            if "job" in row
+            and "start_date" in row
+            and "end_date" in row
+            and "is_part_time" in row
+            and "description" in row
         ]
 
         # Create job info string
@@ -127,6 +162,17 @@ def main():
 
         for i, data in enumerate(valid_jobs):
             job_length = relativedelta(data["end_date"], data["start_date"])
+            if data["is_part_time"]:
+                total_days = (
+                    job_length.years * 365 + job_length.months * 30 + job_length.days
+                )
+                half_days = total_days // 2
+
+                years = half_days // 365
+                remaining_days = half_days % 365
+                months = remaining_days // 30
+                days = remaining_days % 30
+                job_length = relativedelta(years=years, months=months, days=days)
             job_lengths.append(job_length)
 
             job_info += f"JOB {i + 1} | "
@@ -180,6 +226,7 @@ def main():
                 st, new_result, new_job_retriever, new_resume_retriever
             )
             logger.info(f"Time spent analyzing: {datetime.now() - start_time}")
+            st.rerun()
 
     render_output_experience(st.session_state.result)
 

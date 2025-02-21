@@ -21,6 +21,7 @@ from prompts import (
     CHAT_PROMPT,
     passthrough,
 )
+from state_manager import reset_state_analysis
 from context_manager import ContextManager
 from logger import setup_logging
 
@@ -114,6 +115,10 @@ def analyze_inputs(
     ollama: ChatOllama,
 ) -> analyze_inputs_return_type:
     """Analyzes the inputs by processing the job text and resume text using the Mistral model."""
+    if not (job_text and resume_text):
+        logger.error("Missing job text or resume text")
+        output = "Failed: Missing job text or resume text.", None, None
+
     logger.info("Acquiring lock...")
     is_lock_acquired = context_manager.usage_lock.take_lock(st.session_state.session_id)
 
@@ -127,15 +132,12 @@ def analyze_inputs(
 
     logger.info("Lock acquired. Clearing context...")
     context_manager.clear_context(st.session_state.session_id)
+    reset_state_analysis(st)
     logger.info("After clear_context:")
     logger.info(f"context_manager.vectorstores: {context_manager.vectorstores}")
 
     output = None
     embeddings = None
-
-    if not (job_text and resume_text):
-        logger.error("Missing job text or resume text")
-        output = "Failed: Missing job text or resume text.", None, None
 
     if output is None:
         try:
