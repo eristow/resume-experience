@@ -40,12 +40,15 @@ Compare a job ad to a resume and extract the number of years of relevant work ex
   ```bash
   docker build -t resume_experience_streamlit -f streamlit.Dockerfile .
   docker build -t resume_experience_ollama -f ollama.Dockerfile .
+  docker build -t resume_experiende_llm_api -f llm_api.Dockerfile .
   ```
 
+# TODO: Adjust docker run for streamlit container. Probably won't need `--gpus all` after adding `llm_api`, or volume to `models/`.
 - Start an individual container:
   ```bash
   docker run --gpus all -p 8501:8501 -v ${PWD}/src/models:/models -v ${PWD}/src:/src:ro resume_experience_streamlit
   docker run --gpus all -p 11434:11434 resume_experience_ollama
+  docker run --user uwsgi --gpus all -p 80:80 -v /home/eristow/projects/resume-experience/src/models:/models -v /home/eristow/projects/resume-experience/llm_api:/llm_api:ro resume_experience_llm_api
   ```
 
 
@@ -93,10 +96,12 @@ Compare a job ad to a resume and extract the number of years of relevant work ex
 
 - Python packages:
 
-  - Install from `requirements.txt`:
+  - Install from `requirements.txt` files:
+    - This can be done in two separate python venv's.
 
     ```bash
     pip install -r requirements.txt
+    pip install -r llm_api/requirements.txt
     ```
 
 ### RUNNING THE APP
@@ -110,7 +115,16 @@ Compare a job ad to a resume and extract the number of years of relevant work ex
 - Run the app:
 
   ```bash
+  <ACTIVATE streamlit VIRTUAL ENV>
   streamlit run main.py
+  ```
+
+- Run the llm_api:
+  
+  ```bash
+  cd llm_api
+  <ACTIVATE llm_api VIRTUAL ENV>
+  uwsgi --http 0.0.0.0:5000 --module wsgi:app
   ```
 
 ### TESTING

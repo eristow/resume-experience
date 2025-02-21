@@ -3,10 +3,12 @@
   - [ ] On simultaneous runs
   - [ ] During custom_embeddings classes
 
-- [ ] Split up the tuned Mistral model from the Streamlit container
-  - 3 total containers: Streamlit, Ollama, Mistral
-  - Streamlit will have to make API calls to Mistral
-  - Mistral container will have a light API wrapper around the model
+- [ ] Create API for Mistral
+  - [ ] Move llm code from streamlit to llm_api
+  - [ ] Remove GPU capabilities from streamlit in code, image, container, compose
+  - [ ] Add robust logging (req and res) for llm_api
+  - [ ] Create build stages for llm_api Dockerfile
+  - [ ] Live reload for local dev?
 
 - [ ] For prod, probably just a VM with Docker and Docker Compose?
   - Make sure hot reload is turned off.
@@ -22,6 +24,10 @@
 
 
 ## DONE:
+- [x] Split up the tuned Mistral model from the Streamlit container
+  - 3 total containers: Streamlit, Ollama, Mistral
+  - Streamlit will have to make API calls to Mistral
+  - Mistral container will have a light API wrapper around the model (Flask?)
 - [x] Re-enable inputs after analysis run
 - [x] Look into part time date calculation
 - [x] Fix logging id to have a single session ID instead of a new one on each user interaction

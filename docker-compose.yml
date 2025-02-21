@@ -68,3 +68,37 @@ services:
       timeout: 30s
       retries: 5
       start_period: 15s
+
+  llm_api:
+    container_name: llm_api
+
+    image: resume_experience_llm_api
+
+    init: true
+
+    build:
+      context: .
+      dockerfile: llm_api.Dockerfile
+
+    ports:
+      - '80:80'
+      - '5000:5000'
+
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - capabilities: [gpu]
+          memory: 4G
+        limits:
+          memory: 8G
+
+    environment:
+      - FLASK_ENV=development
+
+    healthcheck:
+      test: ['CMD-SHELL', 'curl localhost:80']
+      interval: 60s
+      timeout: 30s
+      retries: 5
+      start_period: 15s
