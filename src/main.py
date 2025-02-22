@@ -13,6 +13,7 @@ import config
 from state_manager import (
     new_ollama_instance,
     save_analysis_results,
+    reset_state_analysis,
 )
 from components.file_upload import render_file_upload
 from components.text_display import render_text_display
@@ -94,6 +95,58 @@ def confirm_start_analysis():
             st.rerun()
 
 
+def validate_job_info(job_info):
+    return [
+        row
+        for row in st.session_state.job_rows
+        if "job" in row
+        and "start_date" in row
+        and "end_date" in row
+        and "is_part_time" in row
+        and "description" in row
+    ]
+
+
+def create_total_job_info(valid_jobs):
+    # Create job info string
+    job_info = ""
+    job_lengths = []
+
+    for i, data in enumerate(valid_jobs):
+        job_length = relativedelta(data["end_date"], data["start_date"])
+        if data["is_part_time"]:
+            total_days = (
+                job_length.years * 365 + job_length.months * 30 + job_length.days
+            )
+            half_days = total_days // 2
+
+            years = half_days // 365
+            remaining_days = half_days % 365
+            months = remaining_days // 30
+            days = remaining_days % 30
+            job_length = relativedelta(years=years, months=months, days=days)
+        job_lengths.append(job_length)
+
+        job_info += f"JOB {i + 1} | "
+        job_info += f"{data['job']} | "
+        job_info += f"Length of job: {job_length.years} years, {job_length.months} months, {job_length.days} days | "
+        job_info += f"{data['description']}\n"
+
+    total_job_lengths = None
+    logger.info(f"job_lengths: {job_lengths}")
+    for length in job_lengths:
+        logger.info(f"length: {length}")
+        if total_job_lengths is None:
+            total_job_lengths = length
+        else:
+            total_job_lengths += length
+
+    return (
+        f"Total length of jobs: {total_job_lengths.years} years, {total_job_lengths.months} months, {total_job_lengths.days} days | \n"
+        + job_info
+    )
+
+
 # Streamlit UI components
 def main():
     """
@@ -145,54 +198,8 @@ def main():
 
         job_info = ""
 
-        # Validate job rows
-        valid_jobs = [
-            row
-            for row in st.session_state.job_rows
-            if "job" in row
-            and "start_date" in row
-            and "end_date" in row
-            and "is_part_time" in row
-            and "description" in row
-        ]
-
-        # Create job info string
-        job_info = ""
-        job_lengths = []
-
-        for i, data in enumerate(valid_jobs):
-            job_length = relativedelta(data["end_date"], data["start_date"])
-            if data["is_part_time"]:
-                total_days = (
-                    job_length.years * 365 + job_length.months * 30 + job_length.days
-                )
-                half_days = total_days // 2
-
-                years = half_days // 365
-                remaining_days = half_days % 365
-                months = remaining_days // 30
-                days = remaining_days % 30
-                job_length = relativedelta(years=years, months=months, days=days)
-            job_lengths.append(job_length)
-
-            job_info += f"JOB {i + 1} | "
-            job_info += f"{data['job']} | "
-            job_info += f"Length of job: {job_length.years} years, {job_length.months} months, {job_length.days} days | "
-            job_info += f"{data['description']}\n"
-
-        total_job_lengths = None
-        logger.info(f"job_lengths: {job_lengths}")
-        for length in job_lengths:
-            logger.info(f"length: {length}")
-            if total_job_lengths is None:
-                total_job_lengths = length
-            else:
-                total_job_lengths += length
-
-        total_job_info = (
-            f"Total length of jobs: {total_job_lengths.years} years, {total_job_lengths.months} months, {total_job_lengths.days} days | \n"
-            + job_info
-        )
+        valid_jobs = validate_job_info(st.session_state.job_rows)
+        total_job_info = create_total_job_info(valid_jobs)
 
         logger.info(f"total_job_info: {total_job_info}")
 
@@ -206,6 +213,8 @@ def main():
                 total_job_info,
             )
 
+            # TODO: Convert to an API call to llm_api
+            reset_state_analysis(st)
             new_result, new_job_retriever, new_resume_retriever = analyze_inputs(
                 st.session_state.job_text,
                 total_job_info,
@@ -222,6 +231,7 @@ def main():
             # app_state.save_analysis_results(
             #     new_result, new_job_retriever, new_resume_retriever
             # )
+            # TODO save retriever in llm_api
             save_analysis_results(
                 st, new_result, new_job_retriever, new_resume_retriever
             )
@@ -261,6 +271,7 @@ def main():
             )
             return
 
+        # TODO: Convert to an API call to llm_api
         handle_chat(
             st,
             user_input,

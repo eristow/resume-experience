@@ -10,25 +10,28 @@ from langchain.prompts import ChatPromptTemplate
 from transformers import AutoTokenizer
 import logging
 import uuid
-import streamlit as st
 from typing import Optional, Tuple, Union
-from custom_embeddings import CustomEmbeddings
-import config
-from prompts import (
+from llm_api.custom_embeddings import CustomEmbeddings
+from llm_api.prompts import (
     ANALYSIS_QUESTION,
     ANALYSIS_PROMPT,
     CHAT_QUESTION,
     CHAT_PROMPT,
     passthrough,
 )
-from state_manager import reset_state_analysis
-from context_manager import ContextManager
-from logger import setup_logging
+from llm_api.context_manager import ContextManager
+from llm_api.logger import setup_logging
 
 logger = setup_logging()
 context_manager = ContextManager()
 
 analyze_inputs_return_type = Union[Tuple[str, Chroma, Chroma], Tuple[str, None, None]]
+
+# TODO: Centralize env var loading
+CHUNK_SIZE = int(os.environ.get("CHUNK_SIZE", 1024))
+CHUNK_OVERLAP = int(os.environ.get("CHUNK_OVERLAP", 200))
+CONTEXT_WINDOW = int(os.environ.get("CONTEXT_WINDOW", 8192))
+TEMP_DIR = os.environ.get("TEMP_DIR", "/tmp/resume-experience")
 
 
 def verify_input_size(
@@ -50,10 +53,9 @@ def verify_input_size(
     total_text_tokens = job_tokens + resume_tokens
     num_chunks = max(
         1,
-        (total_text_tokens + config.app_config.CHUNK_OVERLAP)
-        // (config.app_config.CHUNK_SIZE - config.app_config.CHUNK_OVERLAP),
+        (total_text_tokens + CHUNK_OVERLAP) // (CHUNK_SIZE - CHUNK_OVERLAP),
     )
-    total_chunk_tokens = num_chunks * config.app_config.CHUNK_SIZE
+    total_chunk_tokens = num_chunks * CHUNK_SIZE
 
     total_tokens = total_chunk_tokens + prompt_tokens
 
@@ -64,13 +66,11 @@ def verify_input_size(
     logger.info(f"Total chunk tokens: {total_chunk_tokens}")
     logger.info(f"Total estimated tokens: {total_tokens}")
 
-    max_safe_tokens = (
-        config.app_config.CONTEXT_WINDOW - 200
-    )  # Leave some buffer for safety
+    max_safe_tokens = CONTEXT_WINDOW - 200  # Leave some buffer for safety
     if total_tokens > max_safe_tokens:
         raise ValueError(
             f"Input would require approximately {total_tokens} tokens, "
-            f"exceeding the {config.app_config.CONTEXT_WINDOW} token context window. "
+            f"exceeding the {CONTEXT_WINDOW} token context window. "
             f"Please reduce the input size by about "
             f"{((total_tokens - max_safe_tokens) / total_tokens * 100):.1f}%"
         )
@@ -112,6 +112,7 @@ def create_retrievers(
 def analyze_inputs(
     job_text: str,
     resume_text: str,
+    session_id: str,
     ollama: ChatOllama,
 ) -> analyze_inputs_return_type:
     """Analyzes the inputs by processing the job text and resume text using the Mistral model."""
@@ -120,7 +121,7 @@ def analyze_inputs(
         output = "Failed: Missing job text or resume text.", None, None
 
     logger.info("Acquiring lock...")
-    is_lock_acquired = context_manager.usage_lock.take_lock(st.session_state.session_id)
+    is_lock_acquired = context_manager.usage_lock.take_lock(session_id)
 
     if not is_lock_acquired:
         logger.error("Failed to acquire lock")
@@ -131,8 +132,8 @@ def analyze_inputs(
         )
 
     logger.info("Lock acquired. Clearing context...")
-    context_manager.clear_context(st.session_state.session_id)
-    reset_state_analysis(st)
+    context_manager.clear_context(session_id)
+    # TODO: Removed reset_state_analysis(st) from here. Reset retrievers here
     logger.info("After clear_context:")
     logger.info(f"context_manager.vectorstores: {context_manager.vectorstores}")
 
@@ -160,7 +161,7 @@ def analyze_inputs(
             job_vectorstore = process_text(
                 job_text,
                 embeddings,
-                collection_name=f"job_{st.session_state.session_id}",
+                collection_name=f"job_{session_id}",
             )
             logger.info(f"Created job vectorstore: {job_vectorstore}")
             logger.info(f"job_vectorstore: {job_vectorstore}")
@@ -168,7 +169,7 @@ def analyze_inputs(
             resume_vectorstore = process_text(
                 resume_text,
                 embeddings,
-                collection_name=f"resume_{st.session_state.session_id}",
+                collection_name=f"resume_{session_id}",
             )
             logger.info(f"Created resume vectorstore: {resume_vectorstore}")
             logger.info(f"resume_vectorstore: {resume_vectorstore}")
@@ -180,7 +181,7 @@ def analyze_inputs(
             if output is None:
                 logger.info("Both vectorstores exist")
                 context_manager.register_vectorstores(
-                    st.session_state.session_id, job_vectorstore, resume_vectorstore
+                    session_id, job_vectorstore, resume_vectorstore
                 )
                 logger.info(
                     f"context_manager.vectorstores: {context_manager.vectorstores}"
@@ -219,13 +220,13 @@ def analyze_inputs(
 
         finally:
             if "response" not in locals():
-                context_manager.clear_context(st.session_state.session_id)
+                context_manager.clear_context(session_id)
 
             if embeddings:
                 embeddings.cleanup()
 
     logger.info("Releasing lock")
-    context_manager.usage_lock.release_lock(st.session_state.session_id)
+    context_manager.usage_lock.release_lock(session_id)
 
     return output
 
@@ -242,12 +243,12 @@ def process_text(
         collection_name = str(uuid.uuid4())
 
     # Create a unique directory for this vectorstore
-    persist_directory = os.path.join(config.app_config.TEMP_DIR, collection_name)
+    persist_directory = os.path.join(TEMP_DIR, collection_name)
     os.makedirs(persist_directory, exist_ok=True)
 
     text_splitter = RecursiveCharacterTextSplitter(
-        chunk_size=config.app_config.CHUNK_SIZE,
-        chunk_overlap=config.app_config.CHUNK_OVERLAP,
+        chunk_size=CHUNK_SIZE,
+        chunk_overlap=CHUNK_OVERLAP,
         length_function=lambda x: len(x.split()),
         separators=["\n\n", "\n", " ", ""],
     )

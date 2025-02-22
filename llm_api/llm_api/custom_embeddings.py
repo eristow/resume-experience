@@ -7,7 +7,7 @@ This module provides a custom embeddings class for generating embeddings using a
 import torch
 from transformers import AutoModel, AutoTokenizer, BitsAndBytesConfig
 from langchain.embeddings.base import Embeddings
-from logger import setup_logging
+from llm_api.logger import setup_logging
 import uuid
 import threading
 

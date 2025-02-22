@@ -2,7 +2,6 @@ import os
 from dataclasses import dataclass
 from typing import Optional, List, Dict
 from langchain_community.vectorstores import Chroma
-from langchain_community.chat_models import ChatOllama
 import config
 import logging
 from logger import setup_logging
@@ -27,13 +26,3 @@ def reset_state_analysis(st) -> None:
     st.session_state.job_retriever = None
     st.session_state.resume_retriever = None
     st.session_state.analysis_confirmed = False
-
-
-def new_ollama_instance() -> ChatOllama:
-    """Create a new instance of the ChatOllama model"""
-    return ChatOllama(
-        model="mistral:v0.3",
-        temperature=0.3,
-        base_url=config.app_config.OLLAMA_BASE_URL,
-        num_ctx=config.app_config.CONTEXT_WINDOW,
-    )

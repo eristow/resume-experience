@@ -4,11 +4,20 @@
   - [ ] During custom_embeddings classes
 
 - [ ] Create API for Mistral
+  - [ ] Move `logging.py` to a utils folder, so it can be imported by both
+    - It's just copy/pasted for now...
+  - [ ] What to move from `config.py` to llm_api
   - [ ] Move llm code from streamlit to llm_api
+    - [ ] analyze.py
+    - [ ] context_manager.py
+    - [ ] custom_embeddings.py
+    - [ ] prompts.py
+    - [ ] And tests for above files
   - [ ] Remove GPU capabilities from streamlit in code, image, container, compose
+  - [ ] Rename `src/` to `streamlit_app/`, and update paths in Dockerfile and docker compose
   - [ ] Add robust logging (req and res) for llm_api
   - [ ] Create build stages for llm_api Dockerfile
-  - [ ] Live reload for local dev?
+  - [x] Live reload for local dev
 
 - [ ] For prod, probably just a VM with Docker and Docker Compose?
   - Make sure hot reload is turned off.

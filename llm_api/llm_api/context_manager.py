@@ -3,7 +3,7 @@ from typing import Optional
 import gc
 import torch
 import uuid
-from logger import setup_logging
+from llm_api.logger import setup_logging
 
 logger = setup_logging()
 

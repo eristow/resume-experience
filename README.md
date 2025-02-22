@@ -48,7 +48,7 @@ Compare a job ad to a resume and extract the number of years of relevant work ex
   ```bash
   docker run --gpus all -p 8501:8501 -v ${PWD}/src/models:/models -v ${PWD}/src:/src:ro resume_experience_streamlit
   docker run --gpus all -p 11434:11434 resume_experience_ollama
-  docker run --user uwsgi --gpus all -p 80:80 -v /home/eristow/projects/resume-experience/src/models:/models -v /home/eristow/projects/resume-experience/llm_api:/llm_api:ro resume_experience_llm_api
+  docker run --user uwsgi --gpus all -p 80:80 -p 5000:5000 -v /home/eristow/projects/resume-experience/src/models:/models -v /home/eristow/projects/resume-experience/llm_api:/llm_api:ro resume_experience_llm_api
   ```
 
 
@@ -121,11 +121,22 @@ Compare a job ad to a resume and extract the number of years of relevant work ex
 
 - Run the llm_api:
   
-  ```bash
-  cd llm_api
-  <ACTIVATE llm_api VIRTUAL ENV>
-  uwsgi --http 0.0.0.0:5000 --module wsgi:app
-  ```
+  - Production mode:
+
+    ```bash
+    cd llm_api
+    <ACTIVATE llm_api VIRTUAL ENV>
+    uwsgi --http 0.0.0.0:5000 --module wsgi:app --master
+    ```
+  
+  - Development mode:
+
+    ```bash
+    cd llm_api
+    export FLASK_ENV=development
+    <ACTIVATE llm_api VIRTUAL ENV>
+    flask --app llm_api run --debug
+    ```
 
 ### TESTING
 - Run the tests:
